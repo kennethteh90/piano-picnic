@@ -19,20 +19,20 @@ jobs:
         with:
           ref: cursor/deps-modernize-6389
 
-      - name: Copy package manifests from validated mirror
-        run: |
-          git clone --depth 1 --branch cursor/deps-modernize-6389 \
-            https://origin.cursor.com/git/kennethteh/tmp-275be7eb62cddb90 /tmp/deps-mirror
-          cp /tmp/deps-mirror/package.json package.json
-          cp /tmp/deps-mirror/package-lock.json package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Regenerate package-lock.json from package.json
+        run: npm install --package-lock-only --ignore-scripts
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
+          git add package-lock.json
           if git diff --staged --quiet; then
-            echo "No manifest changes to sync."
+            echo "Lockfile already matches package.json."
             exit 0
           fi
           git commit -m "chore(deps): React 19.3 and lockfile refresh"
