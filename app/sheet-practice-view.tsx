@@ -198,7 +198,7 @@ export function SheetPracticeView({ onStarEarned }: { onStarEarned: () => void }
             <span>{score?.title ?? "Your melody"}</span>
             <small>Treble clef · {displayNotes.length} notes</small>
           </div>
-          <Staff notes={displayNotes} clef="treble" />
+          <Staff notes={displayNotes} clef="treble" layout="sequence" />
           <p className="chord-formula">{displayNotes.length ? prettyNotes(displayNotes).join(" → ") : "Load or upload a melody to begin"}</p>
         </div>
       </div>
