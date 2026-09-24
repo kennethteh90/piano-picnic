@@ -21,7 +21,7 @@
     "drizzle-orm": "^0.45.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "smplr": "^0.24.0"
+    "smplr": "^1.0.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.53.1",
