@@ -147,6 +147,86 @@ button:focus-visible, a:focus-visible {
   transform: rotate(45deg);
 }
 
+.mode-tabs--five {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 820px) {
+  .mode-tabs--five {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .mode-tabs--five button:nth-child(5) {
+    grid-column: span 2;
+  }
+}
+
+.sheet-practice { margin-top: 8px; }
+.sheet-limit-note {
+  font-size: .92rem;
+  color: #687169;
+  max-width: 590px;
+  margin: 14px 0 0;
+  line-height: 1.55;
+}
+.sheet-upload-row { margin-top: 22px; }
+.sheet-file-label { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.sheet-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+.sheet-samples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 16px;
+}
+.sheet-samples-label { font-size: .82rem; font-weight: 800; color: var(--green); }
+.sheet-omr-message { margin-top: 14px; font-size: .95rem; color: #536057; }
+.sheet-upload-preview {
+  margin-top: 16px;
+  max-width: min(420px, 100%);
+  border: 1px solid #d6d0c4;
+  border-radius: 6px;
+}
+.sheet-note-editor {
+  margin-top: 20px;
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid #d6d0c4;
+  border-radius: 6px;
+  max-width: 420px;
+}
+.sheet-note-editor ul { list-style: none; padding: 0; margin: 10px 0; }
+.sheet-note-editor li { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sheet-note-editor select { flex: 1; padding: 6px 8px; font: inherit; }
+.sheet-remove-note {
+  border: 0;
+  background: var(--sage);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-weight: 900;
+}
+.sheet-practice-card { --accent: var(--green); }
+.sheet-record-zone { margin-top: 28px; }
+.sheet-recording-pulse { color: #a94d42; font-weight: 800; }
+.sheet-results {
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: var(--paper);
+  border: 1px solid #d6d0c4;
+  border-radius: 6px;
+  max-width: 640px;
+}
+.sheet-result-list { margin: 12px 0 0; padding-left: 1.2rem; }
+.sheet-result-ok { color: var(--green); }
+.sheet-result-miss { color: #a94d42; }
+
 .difficulty-bar {
   display: flex;
   align-items: center;
