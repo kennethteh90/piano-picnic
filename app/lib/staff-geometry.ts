@@ -23,6 +23,19 @@ export function staffPositions(clef: Clef): Record<string, number> {
   return clef === "treble" ? TREBLE_STAFF_POSITIONS : BASS_STAFF_POSITIONS;
 }
 
+/** Horizontal bounds of `.staff-lines` in the Staff component (percent of staff width). */
+export const STAFF_NOTE_AREA_LEFT_PCT = 13;
+export const STAFF_NOTE_AREA_RIGHT_INSET_PCT = 4;
+
+/** Even horizontal spacing for monophonic melodies (sheet practice preview). */
+export function sequenceNoteLeftPercent(index: number, total: number): number {
+  if (total <= 0) return 54;
+  if (total === 1) return 54;
+  const rightEdge = 100 - STAFF_NOTE_AREA_RIGHT_INSET_PCT;
+  const span = rightEdge - STAFF_NOTE_AREA_LEFT_PCT;
+  return STAFF_NOTE_AREA_LEFT_PCT + (index / (total - 1)) * span;
+}
+
 // Ledger lines drawn above/below the staff for notes sitting on or beyond the
 // edge ledger positions.
 export function ledgerOffsets(clef: Clef, note: string): number[] {

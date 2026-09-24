@@ -16,53 +16,13 @@ import {
   shuffledIndices,
   type Chord,
 } from "./lib/music-theory";
-import { ledgerOffsets, staffPositions } from "./lib/staff-geometry";
 import { UPRIGHT_PRESET } from "./lib/upright-piano-preset";
+import { Staff } from "./components/staff";
+import { SheetPracticeView } from "./sheet-practice-view";
 
-type Mode = "learn" | "note" | "see" | "hear";
+type Mode = "learn" | "note" | "see" | "hear" | "sheet";
 type Difficulty = "seedling" | "explorer" | "superstar";
 type LearnChordKind = "home" | "companion";
-
-function Staff({ notes, hidden = false, clef = "treble" }: { notes: string[]; hidden?: boolean; clef?: "treble" | "bass" }) {
-  const positions = staffPositions(clef);
-
-  // Yamaha-style chord notation stacks noteheads on one vertical stem. Within
-  // a cluster of adjacent staff steps, every other lower note moves left so
-  // the overlapping noteheads remain readable.
-  const stackedNotes = [...notes].sort((a, b) => (positions[a] ?? 0) - (positions[b] ?? 0));
-  const shiftedNotes = new Set<string>();
-  let runStart = 0;
-  for (let index = 1; index <= stackedNotes.length; index += 1) {
-    const continuesRun = index < stackedNotes.length
-      && (positions[stackedNotes[index]] ?? 0) - (positions[stackedNotes[index - 1]] ?? 0) === 8;
-    if (continuesRun) continue;
-    for (let shiftedIndex = index - 2; shiftedIndex >= runStart; shiftedIndex -= 2) shiftedNotes.add(stackedNotes[shiftedIndex]);
-    runStart = index;
-  }
-  const isChord = notes.length > 1;
-  const stemNote = stackedNotes.at(-1);
-
-  return (
-    <div className={`staff ${hidden ? "staff--hidden" : ""}`} aria-label={hidden ? "Listen for the chord" : `Music notes: ${notes.join(", ")}`}>
-      <span className={`clef clef--${clef}`} aria-hidden="true">{clef === "treble" ? "𝄞" : "𝄢"}</span>
-      <div className="staff-lines" aria-hidden="true">
-        {[0, 1, 2, 3, 4].map((line) => <i key={line} />)}
-      </div>
-      {!hidden && notes.map((note) => (
-        <span
-          className={`note-head ${isChord || (positions[note] ?? 0) >= 95 ? "note-head--down" : ""} ${isChord && note !== stemNote ? "note-head--stemless" : ""}`}
-          key={note}
-          style={{ bottom: positions[note] ?? 40, left: isChord && shiftedNotes.has(note) ? "calc(54% - 16px)" : "54%" }}
-        >
-          {ledgerOffsets(clef, note).map((offset) => <span className="ledger" style={{ top: offset }} key={offset} />)}
-          {note.includes("#") && <span className="accidental">♯</span>}
-          {note.includes("b") && <span className="accidental">♭</span>}
-        </span>
-      ))}
-      {hidden && <div className="listen-mark" aria-hidden="true"><span>♪</span><span>?</span></div>}
-    </div>
-  );
-}
 
 function Piano({ selected, glowing, onPress, register }: { selected: string[]; glowing: string[]; onPress: (note: string) => void; register: "treble" | "bass" }) {
   const keys = register === "treble" ? TREBLE_KEYS : BASS_KEYS;
@@ -314,14 +274,19 @@ export default function Home() {
       </header>
 
       <section className="game" id="top">
-        <nav className="mode-tabs" aria-label="Choose a game">
+        <nav className="mode-tabs mode-tabs--five" aria-label="Choose a game">
           <button className={mode === "learn" ? "active" : ""} onClick={() => switchMode("learn")}><span>01</span> Learn</button>
           <button className={mode === "note" ? "active" : ""} onClick={() => switchMode("note")}><span>02</span> Find a note</button>
           <button className={mode === "see" ? "active" : ""} onClick={() => switchMode("see")}><span>03</span> See a chord</button>
           <button className={mode === "hear" ? "active" : ""} onClick={() => switchMode("hear")}><span>04</span> Hear a chord</button>
+          <button className={mode === "sheet" ? "active" : ""} onClick={() => switchMode("sheet")}><span>05</span> Sheet practice</button>
         </nav>
 
-        {mode !== "learn" && (
+        {mode === "sheet" && (
+          <SheetPracticeView onStarEarned={() => setStars((value) => value + 1)} />
+        )}
+
+        {mode !== "learn" && mode !== "sheet" && (
           <div className="difficulty-bar">
             <div>
               <span className="difficulty-label">Challenge level</span>
@@ -339,7 +304,7 @@ export default function Home() {
           </div>
         )}
 
-        <div className="lesson-grid">
+        {mode !== "sheet" && <div className="lesson-grid">
           <div className="lesson-copy">
             <p className="eyebrow">
               {mode === "learn" && `Key family ${learnIndex + 1} of ${CHORDS.length} · ${learnChordKind === "home" ? "Home chord" : "Companion chord"}`}
@@ -418,9 +383,9 @@ export default function Home() {
               </p>
             )}
           </div>
-        </div>
+        </div>}
 
-        <div className="answer-zone">
+        {mode !== "sheet" && <div className="answer-zone">
           <div className="answer-status" aria-live="polite">
             {feedback === "idle" && <span>{isPractice ? difficulty === "superstar" ? "Build your answer, then check it" : `${selected.length} of ${answer.length} selected` : "The glowing keys make this chord"}</span>}
             {feedback === "try" && <span className="try-again">Almost! Listen and try once more.</span>}
@@ -460,9 +425,9 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
-        <Piano selected={selected} glowing={learningHighlights} onPress={handleKey} register={mode === "note" ? "treble" : "bass"} />
+        {mode !== "sheet" && <Piano selected={selected} glowing={learningHighlights} onPress={handleKey} register={mode === "note" ? "treble" : "bass"} />}
       </section>
 
       <footer>

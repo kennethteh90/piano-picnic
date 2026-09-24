@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   BASS_STAFF_POSITIONS,
+  STAFF_NOTE_AREA_LEFT_PCT,
+  STAFF_NOTE_AREA_RIGHT_INSET_PCT,
   STAFF_STEP_PX,
   TREBLE_STAFF_POSITIONS,
   ledgerOffsets,
+  sequenceNoteLeftPercent,
   staffPositions,
 } from "../../app/lib/staff-geometry.ts";
 import { BASS_KEYS, TREBLE_KEYS } from "../../app/lib/music-theory.ts";
@@ -68,6 +71,19 @@ test("accidentals share their slot with a neighbouring natural", () => {
   assert.equal(TREBLE_STAFF_POSITIONS["C#4"], TREBLE_STAFF_POSITIONS.C4);
   assert.equal(BASS_STAFF_POSITIONS["Bb3"], BASS_STAFF_POSITIONS.B3);
   assert.equal(staffPositions("bass")["F#3"], BASS_STAFF_POSITIONS.F3);
+});
+
+test("sequence preview spreads notes across the staff lines area", () => {
+  const total = 8;
+  assert.equal(sequenceNoteLeftPercent(0, total), STAFF_NOTE_AREA_LEFT_PCT);
+  assert.equal(sequenceNoteLeftPercent(total - 1, total), 100 - STAFF_NOTE_AREA_RIGHT_INSET_PCT);
+  for (let index = 1; index < total; index += 1) {
+    assert.ok(
+      sequenceNoteLeftPercent(index, total) > sequenceNoteLeftPercent(index - 1, total),
+      "each note sits further right than the previous",
+    );
+  }
+  assert.equal(sequenceNoteLeftPercent(0, 1), 54);
 });
 
 test("ledger offsets mark only notes beyond the staff edges", () => {
