@@ -7,7 +7,9 @@ import {
   NOTE_ROUNDS,
   TREBLE_KEYS,
   getBlackKeys,
+  gradeAnswer,
   noteLetter,
+  noteToMidi as theoryMidi,
   prettyNotes,
   sameNotes,
   shuffledIndices,
@@ -33,6 +35,20 @@ test("shuffledIndices handles trivial decks", () => {
   assert.deepEqual(shuffledIndices(1), [0]);
   // avoidFirst is a no-op when there is nothing to swap with.
   assert.deepEqual(shuffledIndices(1, 0), [0]);
+});
+
+test("gradeAnswer distinguishes a short answer from a wrong chord", () => {
+  assert.equal(gradeAnswer(["C3"], ["C3", "E3", "G3"]), "incomplete");
+  assert.equal(gradeAnswer(["C3", "E3", "A3"], ["C3", "E3", "G3"]), "incorrect");
+  assert.equal(gradeAnswer(["G3", "C3", "E3"], ["C3", "E3", "G3"]), "correct");
+});
+
+test("noteToMidi ranks accidentals and octaves", () => {
+  assert.equal(theoryMidi("C4"), 60);
+  assert.equal(theoryMidi("C#4"), 61);
+  assert.equal(theoryMidi("Bb3"), theoryMidi("A#3"));
+  assert.ok(theoryMidi("B2") < theoryMidi("C3"));
+  assert.throws(() => theoryMidi("H4"), /Unparseable/);
 });
 
 test("sameNotes compares chord spellings regardless of order", () => {
@@ -87,6 +103,12 @@ test("every chord spelling is well-formed and playable on the bass keyboard", ()
     assert.equal(family.notes.length, 3, `${family.name} should have three notes`);
     assert.equal(family.companion.notes.length, 3, `${family.companion.name} should have three notes`);
     assert.notEqual(family.name, family.companion.name);
+    assert.ok(family.quality === "major" || family.quality === "minor");
+    assert.equal(family.companion.quality, "dominant");
+    assert.ok(family.notes.some((note) => noteLetter(note) === family.root));
+    assert.ok(family.companion.notes.some((note) => noteLetter(note) === family.companion.root));
+    const fifths = { C: "G", G: "D", F: "C", D: "A", A: "E" };
+    assert.equal(family.companion.root, fifths[family.root]);
     for (const note of [...family.notes, ...family.companion.notes]) {
       assert.match(note, /^[A-G][#b]?\d$/);
       assert.ok(bassRange.has(note), `${note} in ${family.name} is missing from the bass keyboard`);

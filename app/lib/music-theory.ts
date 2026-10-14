@@ -3,9 +3,13 @@
 
 export type NoteName = "C" | "D" | "E" | "F" | "G" | "A" | "B";
 
+export type ChordQuality = "major" | "minor" | "dominant";
+
 export type Chord = {
   name: string;
   mood: string;
+  quality: ChordQuality;
+  root: NoteName;
   notes: string[];
   color: string;
   story: string;
@@ -68,8 +72,25 @@ export function shuffledIndices(length: number, avoidFirst?: number) {
   return indices;
 }
 
+const SEMITONES: Record<NoteName, number> = {
+  C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
+};
+
 export function noteLetter(note: string) {
   return note[0] as NoteName;
+}
+
+export function noteToMidi(note: string) {
+  const match = /^([A-G])([#b]?)(\d)$/.exec(note);
+  if (!match) throw new Error(`Unparseable note name: ${note}`);
+  const letter = match[1] as NoteName;
+  const accidental = match[2];
+  const octave = Number(match[3]);
+  return 12 * (octave + 1) + SEMITONES[letter] + (accidental === "#" ? 1 : accidental === "b" ? -1 : 0);
+}
+
+export function notesByPitch(notes: string[]) {
+  return [...notes].sort((a, b) => noteToMidi(a) - noteToMidi(b));
 }
 
 export function prettyNotes(notes: string[]) {
@@ -84,26 +105,31 @@ export function sameNotes(a: string[], b: string[]) {
   return a.length === b.length && [...a].sort().every((note, index) => note === [...b].sort()[index]);
 }
 
+export function gradeAnswer(selected: string[], answer: string[]) {
+  if (selected.length !== answer.length) return "incomplete" as const;
+  return sameNotes(selected, answer) ? "correct" as const : "incorrect" as const;
+}
+
 export const CHORDS: ChordFamily[] = [
   {
-    name: "C major", mood: "home", notes: ["C3", "E3", "G3"], color: "#f3b72f", story: "Do, Mi, Sol make the home chord.",
-    companion: { name: "G7", mood: "companion", notes: ["B2", "F3", "G3"], color: "#e29a37", story: "Ti, Fa, Sol make its companion. It wants to travel home to C major." },
+    name: "C major", mood: "home", quality: "major", root: "C", notes: ["C3", "E3", "G3"], color: "#f3b72f", story: "Do, Mi, Sol make the home chord.",
+    companion: { name: "G7", mood: "companion", quality: "dominant", root: "G", notes: ["B2", "F3", "G3"], color: "#e29a37", story: "Ti, Fa, Sol make its companion. It wants to travel home to C major." },
   },
   {
-    name: "G major", mood: "home", notes: ["G3", "B3", "D4"], color: "#e47662", story: "Sol, Ti, Re make the home chord.",
-    companion: { name: "D7", mood: "companion", notes: ["F#3", "C4", "D4"], color: "#c85f54", story: "Fa-sharp, Do, Re make its companion. It wants to travel home to G major." },
+    name: "G major", mood: "home", quality: "major", root: "G", notes: ["G3", "B3", "D4"], color: "#e47662", story: "Sol, Ti, Re make the home chord.",
+    companion: { name: "D7", mood: "companion", quality: "dominant", root: "D", notes: ["F#3", "C4", "D4"], color: "#c85f54", story: "Fa-sharp, Do, Re make its companion. It wants to travel home to G major." },
   },
   {
-    name: "F major", mood: "home", notes: ["F3", "A3", "C4"], color: "#6f9d83", story: "Fa, La, Do make the home chord.",
-    companion: { name: "C7", mood: "companion", notes: ["E3", "Bb3", "C4"], color: "#527e68", story: "Mi, Ti-flat, Do make its companion. It wants to travel home to F major." },
+    name: "F major", mood: "home", quality: "major", root: "F", notes: ["F3", "A3", "C4"], color: "#6f9d83", story: "Fa, La, Do make the home chord.",
+    companion: { name: "C7", mood: "companion", quality: "dominant", root: "C", notes: ["E3", "Bb3", "C4"], color: "#527e68", story: "Mi, Ti-flat, Do make its companion. It wants to travel home to F major." },
   },
   {
-    name: "D minor", mood: "home", notes: ["D3", "F3", "A3"], color: "#7676a8", story: "Re, Fa, La make the home chord.",
-    companion: { name: "A7", mood: "companion", notes: ["C#3", "G3", "A3"], color: "#626293", story: "Do-sharp, Sol, La make its companion. It wants to travel home to D minor." },
+    name: "D minor", mood: "home", quality: "minor", root: "D", notes: ["D3", "F3", "A3"], color: "#7676a8", story: "Re, Fa, La make the home chord.",
+    companion: { name: "A7", mood: "companion", quality: "dominant", root: "A", notes: ["C#3", "G3", "A3"], color: "#626293", story: "Do-sharp, Sol, La make its companion. It wants to travel home to D minor." },
   },
   {
-    name: "A minor", mood: "home", notes: ["A3", "C4", "E4"], color: "#4e8fa8", story: "La, Do, Mi make the home chord.",
-    companion: { name: "E7", mood: "companion", notes: ["G#3", "D4", "E4"], color: "#3d748a", story: "Sol-sharp, Re, Mi make its companion. It wants to travel home to A minor." },
+    name: "A minor", mood: "home", quality: "minor", root: "A", notes: ["A3", "C4", "E4"], color: "#4e8fa8", story: "La, Do, Mi make the home chord.",
+    companion: { name: "E7", mood: "companion", quality: "dominant", root: "E", notes: ["G#3", "D4", "E4"], color: "#3d748a", story: "Sol-sharp, Re, Mi make its companion. It wants to travel home to A minor." },
   },
 ];
 
