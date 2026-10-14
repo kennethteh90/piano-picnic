@@ -6,4 +6,5 @@
 
 ## Open
 
-- CD on merge to `main` needs GitHub Actions secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The workflow can be added before those secrets exist; a deploy will fail until they are set.
+- CD on merge to `main` needs GitHub Actions secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. `gh secret list` returned none. The workflow is in `.github/workflows/cd.yml` and will fail the credential check until those secrets are set. The local commits are not pushed.
+
