@@ -25,6 +25,10 @@ Hints follow the game. Find a note helps you name or sing the pitch. See a chord
 
 Keyboard shortcuts work while you answer, so you can stay on the piano keys: `C` hears the chord, `N` hears the notes one by one, `H` asks for a hint, and `Enter` checks.
 
+Version 1.0.0 is recorded in [RELEASES.md](RELEASES.md). The footer shows the same version.
+
+Anonymous game events (page views, mode changes, hints, checks, shortcuts) and sanitized error reports go to `/api/analytics` and `/api/errors`. The worker logs them. There are no cookies and no personal data. Emails and URLs in error text are redacted.
+
 ## Quick start
 
 Requires Node.js `>=22.13.0` (Node 24 recommended).

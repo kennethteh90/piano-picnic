@@ -28,9 +28,11 @@ import {
   shuffledIndices,
   type Chord,
 } from "../lib/music-theory";
+import { sendAnalytics } from "../lib/browser-report";
 import { matchShortcut, shortcutApplies, shortcutHelp, type ShortcutId } from "../lib/shortcuts";
 import { ledgerOffsets, staffPositions } from "../lib/staff-geometry";
 import { UPRIGHT_PRESET } from "../lib/upright-piano-preset";
+import { APP_VERSION, RELEASE_PATH } from "../lib/version";
 
 type LearnChordKind = "home" | "companion";
 type Feedback = "idle" | "correct" | "incomplete" | "incorrect";
@@ -217,6 +219,7 @@ export default function Home() {
   }, []);
 
   const switchMode = (nextMode: GameMode) => {
+    sendAnalytics({ event: "mode_change", mode: nextMode, difficulty });
     setMode(nextMode);
     setLearnPractice(false);
     setLearnChordKind("home");
@@ -229,6 +232,7 @@ export default function Home() {
   };
 
   const changeDifficulty = (nextDifficulty: Difficulty) => {
+    sendAnalytics({ event: "difficulty_change", mode, difficulty: nextDifficulty });
     setDifficulty(nextDifficulty);
     setRound(0);
     resetAnswer();
@@ -253,6 +257,7 @@ export default function Home() {
   const checkAnswer = useCallback(() => {
     if (gradingRef.current) return;
     const result = gradeAnswer(selected, answer);
+    sendAnalytics({ event: "answer_checked", mode, difficulty, correct: result === "correct" });
     if (result === "correct") {
       gradingRef.current = true;
       setFeedback("correct");
@@ -261,13 +266,14 @@ export default function Home() {
       return;
     }
     setFeedback(result);
-  }, [answer, playNotes, selected]);
+  }, [answer, difficulty, mode, playNotes, selected]);
 
   const revealHint = useCallback(() => {
     if (feedback === "correct" || hintCount >= hint.budget) return;
     setHintCount((value) => Math.min(hint.budget, value + 1));
     setFeedback("idle");
-  }, [feedback, hint.budget, hintCount]);
+    sendAnalytics({ event: "hint_used", mode, difficulty });
+  }, [difficulty, feedback, hint.budget, hintCount, mode]);
 
   const nextRound = useCallback(() => {
     resetAnswer();
@@ -307,23 +313,22 @@ export default function Home() {
   const runShortcut = useCallback((id: ShortcutId) => {
     if (!shortcutApplies(id, mode, isPractice)) return false;
     const notes = isPractice ? answer : currentChord.notes;
-    if (id === "hearChord") {
-      void playNotes(notes, false);
-      return true;
-    }
-    if (id === "hearNotes") {
-      void playNotes(notes, true);
+    if (id === "hearChord" || id === "hearNotes") {
+      void playNotes(notes, id === "hearNotes");
+      sendAnalytics({ event: "shortcut_used", shortcut: id, mode, difficulty });
       return true;
     }
     if (id === "hint") {
       if (feedback === "correct" || hintCount >= hint.budget) return false;
       revealHint();
+      sendAnalytics({ event: "shortcut_used", shortcut: id, mode, difficulty });
       return true;
     }
     if (feedback === "correct") nextRound();
     else checkAnswer();
+    sendAnalytics({ event: "shortcut_used", shortcut: id, mode, difficulty });
     return true;
-  }, [answer, checkAnswer, currentChord.notes, feedback, hint.budget, hintCount, isPractice, mode, nextRound, playNotes, revealHint]);
+  }, [answer, checkAnswer, currentChord.notes, difficulty, feedback, hint.budget, hintCount, isPractice, mode, nextRound, playNotes, revealHint]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -337,6 +342,10 @@ export default function Home() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [runShortcut]);
+
+  useEffect(() => {
+    sendAnalytics({ event: "page_view", mode: "learn", difficulty: "seedling", path: RELEASE_PATH });
+  }, []);
 
   const hearTitle = mode === "note" ? "Hear note" : "Hear chord";
 
@@ -531,7 +540,7 @@ export default function Home() {
 
       <footer>
         <p>Made for curious little musicians</p>
-        <span>Listen • Look • Play</span>
+        <span>Listen • Look • Play · {APP_VERSION}</span>
       </footer>
     </main>
   );

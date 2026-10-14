@@ -9,13 +9,14 @@ codebase — the whole game lives in a handful of files.
 npm install
 npm run dev     # start the dev server
 npm test        # typecheck + lint + unit + fuzz + integration
+npm run audit   # production dependency audit
 ```
 
 Requires Node.js `>=22.13.0` (Node 24 recommended).
 
 ## Before opening a PR
 
-- `npm test` passes (CI runs exactly this).
+- `npm test` passes locally. CI runs lint, the test suites, and `npm run audit` on every push and pull request. A push to `main` also runs the CD workflow, which deploys to Cloudflare Workers.
 - New pure logic lands in `app/lib/*`, React-free and covered by tests.
   Keep these modules free of React/DOM imports so they stay testable under
   plain `node --test`.

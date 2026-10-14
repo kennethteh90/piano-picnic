@@ -51,6 +51,7 @@ test("renders the Piano Picnic learning game", async () => {
   assert.match(html, /Explorer/);
   assert.match(html, /Superstar/);
   assert.match(html, /Names stay on the screen/);
+  assert.match(html, /1\.0\.0/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
@@ -74,4 +75,51 @@ test("unknown pages return a plain 404", async () => {
 test("image optimization endpoint rejects requests without parameters", async () => {
   const response = await render("/_vinext/image");
   assert.equal(response.status, 400);
+});
+
+async function post(path, body, extraHeaders = {}) {
+  const workerUrl = new URL("../../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `${process.pid}-post`);
+  const { default: worker } = await import(workerUrl.href);
+  return worker.fetch(
+    new Request(`http://localhost${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json", ...extraHeaders },
+      body,
+    }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+}
+
+test("analytics accepts a game event and rejects anything else", async () => {
+  const accepted = await post("/api/analytics", JSON.stringify({
+    event: "page_view",
+    mode: "learn",
+    difficulty: "seedling",
+    path: "/v1",
+    email: "kid@example.com",
+  }));
+  assert.equal(accepted.status, 204);
+
+  const rejected = await post("/api/analytics", JSON.stringify({ event: "keystroke" }));
+  assert.equal(rejected.status, 400);
+
+  const malformed = await post("/api/analytics", "{");
+  assert.equal(malformed.status, 400);
+
+  const get = await render("/api/analytics");
+  assert.equal(get.status, 405);
+});
+
+test("error reports accept a sanitized failure and reject an empty message", async () => {
+  const accepted = await post("/api/errors", JSON.stringify({
+    message: "piano failed for kid@example.com",
+    source: "window",
+    path: "/v1",
+  }));
+  assert.equal(accepted.status, 204);
+
+  const rejected = await post("/api/errors", JSON.stringify({ message: " ", source: "window", path: "/v1" }));
+  assert.equal(rejected.status, 400);
 });
