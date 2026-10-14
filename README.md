@@ -13,9 +13,17 @@ real sampled upright piano.
 - **Hear a chord** — listen and rebuild the chord from sound alone (with
   progressive hints).
 
-Three challenge levels: *Seedling* keeps note names visible and deals rounds in
-order; *Explorer* hides names and shuffles the deck; *Superstar* reshuffles
-between every full pass so nothing repeats back-to-back.
+The release lives at `/v1`. `/` redirects there.
+
+Three challenge levels, each stricter than the last:
+
+- **Seedling** keeps note names on screen, deals questions in order, and lets hints show the answer.
+- **Explorer** hides the names, shuffles the deck once, and lets each hint name one missing note. The same shuffle repeats so the set can be learned.
+- **Superstar** blanks the piano labels, reshuffles after every pass with no immediate repeat, and allows one hint that never names a key.
+
+Hints follow the game. Find a note helps you name or sing the pitch. See a chord and Learn practice point at the next missing note, or only the chord's home syllable on Superstar. Hear a chord reveals noteheads on the staff for Seedling and Explorer, and keeps the staff blank on Superstar.
+
+Keyboard shortcuts work while you answer, so you can stay on the piano keys: `C` hears the chord, `N` hears the notes one by one, `H` asks for a hint, and `Enter` checks.
 
 ## Quick start
 

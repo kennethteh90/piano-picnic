@@ -15,8 +15,14 @@ async function render(path = "/", headers = {}) {
   );
 }
 
-test("renders the Piano Picnic learning game", async () => {
+test("sends the home page to the v1 release", async () => {
   const response = await render();
+  assert.equal(response.status, 308);
+  assert.match(response.headers.get("location") ?? "", /\/v1$/);
+});
+
+test("renders the Piano Picnic learning game", async () => {
+  const response = await render("/v1");
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
@@ -36,17 +42,26 @@ test("renders the Piano Picnic learning game", async () => {
   assert.match(html, /B♭, Ti♭/);
   assert.match(html, /Do/);
   assert.match(html, /Tap the piano keys to answer/);
+  assert.match(html, /While you answer/);
+  assert.match(html, /Hear chord/);
+  assert.match(html, /Hear notes/);
+  assert.match(html, /Hint/);
+  assert.match(html, /Check/);
+  assert.match(html, /Seedling/);
+  assert.match(html, /Explorer/);
+  assert.match(html, /Superstar/);
+  assert.match(html, /Names stay on the screen/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
 test("keeps deployment-specific origins out of rendered markup", async () => {
-  const html = await (await render()).text();
+  const html = await (await render("/v1")).text();
   assert.doesNotMatch(html, /raja73|chatgpt\.site/, "rendered HTML must not embed a personal deploy URL");
 });
 
 test("builds absolute social-card URLs from the request host", async () => {
   const html = await (
-    await render("/", { "x-forwarded-host": "example.org", "x-forwarded-proto": "https" })
+    await render("/v1", { "x-forwarded-host": "example.org", "x-forwarded-proto": "https" })
   ).text();
   assert.match(html, /<meta property="og:image" content="https:\/\/example\.org\/og\.png"/);
 });
