@@ -18,10 +18,10 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "smplr": "^0.24.0"
+    "smplr": "^1.1.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.53.1",
