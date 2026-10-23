@@ -33,7 +33,12 @@ test("renders the Piano Picnic learning game", async () => {
   assert.match(html, /Find a note/);
   assert.match(html, /See a chord/);
   assert.match(html, /Hear a chord/);
-  assert.match(html, /Upright piano/);
+  assert.match(html, /Name it/);
+  assert.match(html, /Sheet reader/);
+  assert.doesNotMatch(html, /Scan &amp; play|Scan & play/);
+  assert.match(html, /Upright/);
+  assert.match(html, /Grand/);
+  assert.match(html, /Organ/);
   assert.match(html, /Play whole chord/);
   assert.match(html, /Notes one by one/);
   assert.match(html, /Home chord/);
@@ -45,14 +50,24 @@ test("renders the Piano Picnic learning game", async () => {
   assert.match(html, /While you answer/);
   assert.match(html, /Hear chord/);
   assert.match(html, /Hear notes/);
-  assert.match(html, /Hint/);
-  assert.match(html, /Check/);
+  assert.doesNotMatch(html, /H Hint/);
+  assert.doesNotMatch(html, /Enter Check/);
   assert.match(html, /Seedling/);
   assert.match(html, /Explorer/);
   assert.match(html, /Superstar/);
   assert.match(html, /Names stay on the screen/);
   assert.match(html, /1\.0\.0/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
+});
+
+test("renders the sheet reader at its own route", async () => {
+  const response = await render("/v1/scan");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Read the music/);
+  assert.match(html, /Upload pages/);
+  assert.match(html, /← Games/);
+  assert.match(html, /Treble keys light up/);
 });
 
 test("keeps deployment-specific origins out of rendered markup", async () => {

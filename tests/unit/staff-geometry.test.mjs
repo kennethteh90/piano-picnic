@@ -4,7 +4,8 @@ import {
   BASS_STAFF_POSITIONS,
   STAFF_STEP_PX,
   TREBLE_STAFF_POSITIONS,
-  ledgerOffsets,
+  ledgerCenters,
+  signaturePitch,
   staffPositions,
 } from "../../app/lib/staff-geometry.ts";
 import { BASS_KEYS, TREBLE_KEYS } from "../../app/lib/music-theory.ts";
@@ -70,13 +71,22 @@ test("accidentals share their slot with a neighbouring natural", () => {
   assert.equal(staffPositions("bass")["F#3"], BASS_STAFF_POSITIONS.F3);
 });
 
-test("ledger offsets mark only notes beyond the staff edges", () => {
-  assert.deepEqual(ledgerOffsets("treble", "C4"), [6]);
-  assert.deepEqual(ledgerOffsets("treble", "C#4"), [6]);
-  assert.deepEqual(ledgerOffsets("treble", "D4"), []);
-  assert.deepEqual(ledgerOffsets("treble", "G4"), []);
-  assert.deepEqual(ledgerOffsets("bass", "B2"), []);
-  assert.deepEqual(ledgerOffsets("bass", "C4"), [6]);
-  assert.deepEqual(ledgerOffsets("bass", "D4"), [14]);
-  assert.deepEqual(ledgerOffsets("bass", "E4"), [6, 22]);
+test("ledger lines are shared, horizontal, and only exist outside the staff", () => {
+  assert.deepEqual(ledgerCenters("treble", ["C4"]), [54]);
+  assert.deepEqual(ledgerCenters("treble", ["C#4"]), [54]);
+  assert.deepEqual(ledgerCenters("treble", ["D4"]), []);
+  assert.deepEqual(ledgerCenters("treble", ["G4"]), []);
+  assert.deepEqual(ledgerCenters("bass", ["B2"]), []);
+  assert.deepEqual(ledgerCenters("bass", ["C4"]), [150]);
+  assert.deepEqual(ledgerCenters("bass", ["D4"]), [150]);
+  assert.deepEqual(ledgerCenters("bass", ["E4"]), [150, 166]);
+  // E7 stacks D and E above the staff. One line per staff position, not one stub per note.
+  assert.deepEqual(ledgerCenters("bass", ["G#3", "D4", "E4"]), [150, 166]);
+});
+
+test("signature accidentals use the octave beside the clef", () => {
+  assert.equal(signaturePitch("bass", "G", "sharp"), "G3");
+  assert.equal(signaturePitch("bass", "F", "sharp"), "F3");
+  assert.equal(signaturePitch("bass", "B", "flat"), "B2");
+  assert.equal(signaturePitch("treble", "F", "sharp"), "F5");
 });

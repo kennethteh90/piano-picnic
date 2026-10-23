@@ -23,13 +23,18 @@ test("letter shortcuts ignore case and modifiers", () => {
 
 test("Find a note has no hear-notes shortcut, and lessons wait until practice for hint and check", () => {
   assert.equal(shortcutApplies("hearNotes", "note", true), false);
+  assert.equal(shortcutApplies("hearNotes", "name", true), false);
+  assert.equal(shortcutApplies("hearChord", "name", true), true);
   assert.equal(shortcutApplies("hearChord", "note", true), true);
   assert.equal(shortcutApplies("hint", "learn", false), false);
   assert.equal(shortcutApplies("check", "learn", false), false);
   assert.equal(shortcutApplies("hearChord", "learn", false), true);
   assert.equal(shortcutApplies("hint", "hear", true), true);
 
-  const noteHelp = shortcutHelp("note").map((shortcut) => shortcut.title);
+  const noteHelp = shortcutHelp("note", true).map((shortcut) => shortcut.title);
   assert.deepEqual(noteHelp, ["Hear note", "Hint", "Check"]);
-  assert.deepEqual(shortcutHelp("hear").map((shortcut) => shortcut.title), ["Hear chord", "Hear notes", "Hint", "Check"]);
+  assert.deepEqual(shortcutHelp("hear", true).map((shortcut) => shortcut.title), ["Hear chord", "Hear notes", "Hint", "Check"]);
+  assert.deepEqual(shortcutHelp("learn", false).map((shortcut) => shortcut.title), ["Hear chord", "Hear notes"]);
+  assert.deepEqual(shortcutHelp("learn", true).map((shortcut) => shortcut.title), ["Hear chord", "Hear notes"]);
+  assert.deepEqual(shortcutHelp("name", true).map((shortcut) => shortcut.title), ["Hear it", "Hint", "Check"]);
 });

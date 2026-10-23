@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Sampler } from "smplr";
 import {
   DIFFICULTIES,
   DIFFICULTY_RULES,
   afterCorrectRound,
   difficultySummary,
+  hearInstruction,
   questionIndex,
   showsPianoLabels,
   showsQuestionNames,
@@ -15,109 +16,46 @@ import {
 } from "../lib/difficulty";
 import { hintView } from "../lib/hints";
 import {
-  BASS_KEYS,
   CHALLENGE_CHORDS,
   CHORDS,
   NOTE_ROUNDS,
   SOLFEGE,
-  TREBLE_KEYS,
-  getBlackKeys,
+  EMPTY_SIGNATURE,
   gradeAnswer,
   noteLetter,
   prettyNotes,
   shuffledIndices,
   type Chord,
 } from "../lib/music-theory";
+import {
+  EAR_NOTES,
+  choiceSchedule,
+  deckLength,
+  gradeChoice,
+  nameAnswerLabel,
+  nameChoices,
+  nameHint,
+  nameInstruction,
+  nameQuestion,
+  nameSchedule,
+  type NameDeck,
+  type Sounding,
+} from "../lib/naming";
 import { sendAnalytics } from "../lib/browser-report";
 import { matchShortcut, shortcutApplies, shortcutHelp, type ShortcutId } from "../lib/shortcuts";
-import { ledgerOffsets, staffPositions } from "../lib/staff-geometry";
-import { UPRIGHT_PRESET } from "../lib/upright-piano-preset";
-import { APP_VERSION, RELEASE_PATH } from "../lib/version";
+import { PIANO_TONES, type PianoTone } from "../lib/piano-tones";
+import { createTone, type Playable } from "../lib/piano-sampler";
+import { APP_VERSION, RELEASE_PATH, SHEET_SCAN_PATH } from "../lib/version";
+import { Piano } from "../components/piano";
+import { Staff } from "../components/staff";
 
 type LearnChordKind = "home" | "companion";
 type Feedback = "idle" | "correct" | "incomplete" | "incorrect";
 
-function Staff({ notes, hidden = false, clef = "treble" }: { notes: string[]; hidden?: boolean; clef?: "treble" | "bass" }) {
-  const positions = staffPositions(clef);
-
-  // Yamaha-style chord notation stacks noteheads on one vertical stem. Within
-  // a cluster of adjacent staff steps, every other lower note moves left so
-  // the overlapping noteheads remain readable.
-  const stackedNotes = [...notes].sort((a, b) => (positions[a] ?? 0) - (positions[b] ?? 0));
-  const shiftedNotes = new Set<string>();
-  let runStart = 0;
-  for (let index = 1; index <= stackedNotes.length; index += 1) {
-    const continuesRun = index < stackedNotes.length
-      && (positions[stackedNotes[index]] ?? 0) - (positions[stackedNotes[index - 1]] ?? 0) === 8;
-    if (continuesRun) continue;
-    for (let shiftedIndex = index - 2; shiftedIndex >= runStart; shiftedIndex -= 2) shiftedNotes.add(stackedNotes[shiftedIndex]);
-    runStart = index;
-  }
-  const isChord = notes.length > 1;
-  const stemNote = stackedNotes.at(-1);
-
-  return (
-    <div className={`staff ${hidden ? "staff--hidden" : ""}`} aria-label={hidden ? "Listen for the chord" : `Music notes: ${notes.join(", ")}`}>
-      <span className={`clef clef--${clef}`} aria-hidden="true">{clef === "treble" ? "𝄞" : "𝄢"}</span>
-      <div className="staff-lines" aria-hidden="true">
-        {[0, 1, 2, 3, 4].map((line) => <i key={line} />)}
-      </div>
-      {!hidden && notes.map((note) => (
-        <span
-          className={`note-head ${isChord || (positions[note] ?? 0) >= 95 ? "note-head--down" : ""} ${isChord && note !== stemNote ? "note-head--stemless" : ""}`}
-          key={note}
-          style={{ bottom: positions[note] ?? 40, left: isChord && shiftedNotes.has(note) ? "calc(54% - 16px)" : "54%" }}
-        >
-          {ledgerOffsets(clef, note).map((offset) => <span className="ledger" style={{ top: offset }} key={offset} />)}
-          {note.includes("#") && <span className="accidental">♯</span>}
-          {note.includes("b") && <span className="accidental">♭</span>}
-        </span>
-      ))}
-      {hidden && <div className="listen-mark" aria-hidden="true"><span>♪</span><span>?</span></div>}
-    </div>
-  );
-}
-
-function Piano({ selected, glowing, labeled, onPress, register }: { selected: string[]; glowing: string[]; labeled: boolean; onPress: (note: string) => void; register: "treble" | "bass" }) {
-  const keys = register === "treble" ? TREBLE_KEYS : BASS_KEYS;
-  const blackKeys = getBlackKeys(register);
-  return (
-    <div className="piano-shell">
-      <div className={`piano ${labeled ? "" : "piano--unlabeled"}`} role="group" aria-label="Piano keyboard">
-        {keys.map((note, index) => {
-          const letter = noteLetter(note);
-          const active = selected.includes(note);
-          const lit = glowing.includes(note);
-          const blackKey = blackKeys[index];
-          return (
-            <div className="key-wrap" key={note}>
-              <button
-                className={`white-key ${active ? "is-selected" : ""} ${lit ? "is-glowing" : ""}`}
-                onClick={() => onPress(note)}
-                aria-pressed={active}
-                aria-label={`${letter}, ${SOLFEGE[letter]}`}
-              >
-                <span className="solfege">{SOLFEGE[letter]}</span>
-                <strong>{letter}</strong>
-              </button>
-              {blackKey && index < keys.length - 1 && (
-                <button
-                  className={`black-key ${selected.includes(blackKey.note) ? "is-selected" : ""} ${glowing.includes(blackKey.note) ? "is-glowing" : ""}`}
-                  onClick={() => onPress(blackKey.note)}
-                  aria-pressed={selected.includes(blackKey.note)}
-                  aria-label={`${blackKey.letter}, ${blackKey.solfege}`}
-                >
-                  <span className="solfege">{blackKey.solfege}</span>
-                  <strong>{blackKey.letter}</strong>
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="keyboard-caption"><span>Lower</span><span>Tap the piano keys to answer</span><span>Higher</span></div>
-    </div>
-  );
+function dealOrder(length: number, level: Difficulty) {
+  return DIFFICULTY_RULES[level].order === "fixed"
+    ? Array.from({ length }, (_, index) => index)
+    : shuffledIndices(length);
 }
 
 export default function Home() {
@@ -130,16 +68,21 @@ export default function Home() {
   const [hintCount, setHintCount] = useState(0);
   const [noteOrder, setNoteOrder] = useState(() => NOTE_ROUNDS.map((_, index) => index));
   const [chordOrder, setChordOrder] = useState(() => CHALLENGE_CHORDS.map((_, index) => index));
+  const [nameDeck, setNameDeck] = useState<NameDeck>("note");
+  const [nameOrder, setNameOrder] = useState(() => EAR_NOTES.map((_, index) => index));
+  const [choice, setChoice] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<Feedback>("idle");
   const [stars, setStars] = useState(0);
   const [muted, setMuted] = useState(false);
   const [soundStatus, setSoundStatus] = useState<"sleeping" | "loading" | "ready" | "error">("sleeping");
   const audioRef = useRef<AudioContext | null>(null);
-  const pianoRef = useRef<ReturnType<typeof Sampler> | null>(null);
-  const pianoPromiseRef = useRef<Promise<ReturnType<typeof Sampler>> | null>(null);
+  const [tone, setTone] = useState<PianoTone>("upright");
+  const pianoRef = useRef<Playable | null>(null);
+  const toneRef = useRef<PianoTone>("upright");
+  const loadedToneRef = useRef<PianoTone | null>(null);
+  const loadIdRef = useRef(0);
   const gradingRef = useRef(false);
-
   const currentFamily = CHORDS[learnIndex % CHORDS.length];
   const noteIndex = questionIndex(difficulty, round, noteOrder, NOTE_ROUNDS.length);
   const chordIndex = questionIndex(difficulty, round, chordOrder, CHALLENGE_CHORDS.length);
@@ -147,50 +90,72 @@ export default function Home() {
     ? learnChordKind === "home" ? currentFamily : currentFamily.companion
     : CHALLENGE_CHORDS[chordIndex];
   const currentNote = NOTE_ROUNDS[noteIndex];
+  const nameLength = deckLength(nameDeck);
+  const ear = useMemo(
+    () => nameQuestion(nameDeck, questionIndex(difficulty, round, nameOrder, nameLength)),
+    [difficulty, nameDeck, nameLength, nameOrder, round],
+  );
   const answer = useMemo(() => (mode === "note" ? [currentNote] : currentChord.notes), [currentChord.notes, currentNote, mode]);
   const maxSelection = mode === "note" ? 1 : 3;
   const isPractice = mode !== "learn" || learnPractice;
   const showQuestionLabels = showsQuestionNames(difficulty, mode, isPractice);
-  const hint = hintView({
-    mode,
+  const builtHint = hintView({
+    mode: mode === "name" ? "learn" : mode,
     difficulty,
     answer,
     selected,
     hintsUsed: hintCount,
     chord: { quality: currentChord.quality, root: currentChord.root },
   });
-  const staffNotes = mode === "note"
-    ? [currentNote]
-    : mode === "hear"
-      ? (feedback === "correct" ? currentChord.notes : hint.staffNotes)
-      : currentChord.notes;
-  const staffHidden = mode === "hear" && staffNotes.length === 0;
-  const glowing = !isPractice ? currentChord.notes : feedback === "correct" ? [] : hint.glowNotes;
+  const heardHint = nameHint({ question: ear, difficulty, hintsUsed: hintCount });
+  const hint = mode === "name"
+    ? { message: heardHint.message, staffNotes: [] as string[], glowNotes: heardHint.glowNotes, hintsUsed: heardHint.hintsUsed, budget: heardHint.budget }
+    : builtHint;
+  const namedStaff = mode !== "name" || feedback !== "correct"
+    ? []
+    : ear.deck === "note" && ear.note
+      ? [ear.note]
+      : ear.deck === "home" && ear.chord
+        ? ear.chord.notes
+        : [];
+  const staffNotes = mode === "name"
+    ? namedStaff
+    : mode === "note"
+      ? [currentNote]
+      : mode === "hear"
+        ? (feedback === "correct" ? currentChord.notes : hint.staffNotes)
+        : currentChord.notes;
+  const staffHidden = staffNotes.length === 0 && (mode === "hear" || mode === "name");
+  const glowing = mode === "name"
+    ? (feedback === "correct" ? [] : heardHint.glowNotes)
+    : !isPractice ? currentChord.notes : feedback === "correct" ? [] : hint.glowNotes;
+  const cardChord = mode === "name" && ear.chord ? ear.chord : currentChord;
+  const cardColor = mode === "name" ? (ear.chord?.color ?? "#4e8fa8") : currentChord.color;
 
   const getPiano = useCallback(async () => {
-    if (pianoRef.current) return pianoRef.current;
-    if (pianoPromiseRef.current) return pianoPromiseRef.current;
+    const requested = toneRef.current;
+    if (pianoRef.current && loadedToneRef.current === requested) return pianoRef.current;
 
-    pianoPromiseRef.current = (async () => {
-      setSoundStatus("loading");
-      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const context = audioRef.current ?? new AudioContextClass();
-      audioRef.current = context;
-      if (context.state === "suspended") await context.resume();
+    const loadId = ++loadIdRef.current;
+    pianoRef.current = null;
+    setSoundStatus("loading");
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const context = audioRef.current ?? new AudioContextClass();
+    audioRef.current = context;
+    if (context.state === "suspended") await context.resume();
 
-      const piano = Sampler(context, { preset: UPRIGHT_PRESET, volume: 72 });
-      await piano.ready;
+    try {
+      const piano = await createTone(context, requested);
+      if (loadId !== loadIdRef.current) return piano;
       pianoRef.current = piano;
+      loadedToneRef.current = requested;
       setSoundStatus("ready");
       return piano;
-    })().catch((error) => {
-      console.error("Could not load the upright piano samples", error);
-      pianoPromiseRef.current = null;
-      setSoundStatus("error");
+    } catch (error) {
+      console.error("Could not load the piano samples", error);
+      if (loadId === loadIdRef.current) setSoundStatus("error");
       throw error;
-    });
-
-    return pianoPromiseRef.current;
+    }
   }, []);
 
   const playNotes = useCallback(async (notes: string[], rolled = false) => {
@@ -214,9 +179,31 @@ export default function Home() {
   const resetAnswer = useCallback(() => {
     gradingRef.current = false;
     setSelected([]);
+    setChoice(null);
     setFeedback("idle");
     setHintCount(0);
   }, []);
+
+  const playSoundings = useCallback(async (schedule: Sounding[]) => {
+    if (muted || schedule.length === 0) return;
+    try {
+      const piano = await getPiano();
+      const context = audioRef.current;
+      if (!context) return;
+      if (context.state === "suspended") await context.resume();
+      const start = context.currentTime + 0.02;
+      for (const event of schedule) {
+        event.notes.forEach((note) => piano.start({ note, time: start + event.at, duration: event.duration, velocity: 84 }));
+      }
+    } catch {
+      // The visible sound status explains that the samples could not load.
+    }
+  }, [getPiano, muted]);
+
+  const playNaming = useCallback(async (deck: NameDeck, level: Difficulty, roundIndex: number, order: number[]) => {
+    const question = nameQuestion(deck, questionIndex(level, roundIndex, order, deckLength(deck)));
+    await playSoundings(nameSchedule(level, question));
+  }, [playSoundings]);
 
   const switchMode = (nextMode: GameMode) => {
     sendAnalytics({ event: "mode_change", mode: nextMode, difficulty });
@@ -225,7 +212,11 @@ export default function Home() {
     setLearnChordKind("home");
     setRound(0);
     resetAnswer();
-    if (nextMode !== "learn" && DIFFICULTY_RULES[difficulty].order === "shuffled") {
+    if (nextMode === "name") {
+      const order = dealOrder(deckLength(nameDeck), difficulty);
+      setNameOrder(order);
+      void playNaming(nameDeck, difficulty, 0, order);
+    } else if (nextMode !== "learn" && DIFFICULTY_RULES[difficulty].order === "shuffled") {
       if (nextMode === "note") setNoteOrder(shuffledIndices(NOTE_ROUNDS.length));
       else setChordOrder(shuffledIndices(CHALLENGE_CHORDS.length));
     }
@@ -236,16 +227,27 @@ export default function Home() {
     setDifficulty(nextDifficulty);
     setRound(0);
     resetAnswer();
+    const nextNameOrder = dealOrder(deckLength(nameDeck), nextDifficulty);
+    setNameOrder(nextNameOrder);
     if (DIFFICULTY_RULES[nextDifficulty].order === "shuffled") {
       setNoteOrder(shuffledIndices(NOTE_ROUNDS.length));
       setChordOrder(shuffledIndices(CHALLENGE_CHORDS.length));
     }
+    if (mode === "name") void playNaming(nameDeck, nextDifficulty, 0, nextNameOrder);
   };
 
   const handleKey = (note: string) => {
+    if (mode === "name" && nameDeck !== "note") {
+      void playNotes([note]);
+      return;
+    }
     if (feedback === "correct") return;
     void playNotes([note]);
     setFeedback("idle");
+    if (mode === "name") {
+      setChoice(choice === note ? null : note);
+      return;
+    }
     if (selected.includes(note)) {
       setSelected(selected.filter((key) => key !== note));
       return;
@@ -256,6 +258,19 @@ export default function Home() {
 
   const checkAnswer = useCallback(() => {
     if (gradingRef.current) return;
+    if (mode === "name") {
+      const result = gradeChoice(choice, ear.answerId);
+      sendAnalytics({ event: "answer_checked", mode, difficulty, correct: result === "correct" });
+      if (result === "correct") {
+        gradingRef.current = true;
+        setFeedback("correct");
+        setStars((value) => value + 1);
+        void playNaming(nameDeck, difficulty, round, nameOrder);
+        return;
+      }
+      setFeedback(result);
+      return;
+    }
     const result = gradeAnswer(selected, answer);
     sendAnalytics({ event: "answer_checked", mode, difficulty, correct: result === "correct" });
     if (result === "correct") {
@@ -266,7 +281,7 @@ export default function Home() {
       return;
     }
     setFeedback(result);
-  }, [answer, difficulty, mode, playNotes, selected]);
+  }, [answer, choice, difficulty, ear.answerId, mode, nameDeck, nameOrder, playNaming, playNotes, round, selected]);
 
   const revealHint = useCallback(() => {
     if (feedback === "correct" || hintCount >= hint.budget) return;
@@ -286,13 +301,16 @@ export default function Home() {
       }
       return;
     }
-    const length = mode === "note" ? NOTE_ROUNDS.length : CHALLENGE_CHORDS.length;
-    const order = mode === "note" ? noteOrder : chordOrder;
+    const length = mode === "name" ? nameLength : mode === "note" ? NOTE_ROUNDS.length : CHALLENGE_CHORDS.length;
+    const order = mode === "name" ? nameOrder : mode === "note" ? noteOrder : chordOrder;
     const next = afterCorrectRound({ difficulty, round, length, order });
     setRound(next.round);
-    if (mode === "note") setNoteOrder(next.order);
+    if (mode === "name") {
+      setNameOrder(next.order);
+      void playNaming(nameDeck, difficulty, next.round, next.order);
+    } else if (mode === "note") setNoteOrder(next.order);
     else setChordOrder(next.order);
-  }, [chordOrder, difficulty, learnChordKind, mode, noteOrder, resetAnswer, round]);
+  }, [chordOrder, difficulty, learnChordKind, mode, nameDeck, nameLength, nameOrder, noteOrder, playNaming, resetAnswer, round]);
 
   const previousLearningChord = () => {
     resetAnswer();
@@ -314,7 +332,8 @@ export default function Home() {
     if (!shortcutApplies(id, mode, isPractice)) return false;
     const notes = isPractice ? answer : currentChord.notes;
     if (id === "hearChord" || id === "hearNotes") {
-      void playNotes(notes, id === "hearNotes");
+      if (mode === "name") void playNaming(nameDeck, difficulty, round, nameOrder);
+      else void playNotes(notes, id === "hearNotes");
       sendAnalytics({ event: "shortcut_used", shortcut: id, mode, difficulty });
       return true;
     }
@@ -328,7 +347,7 @@ export default function Home() {
     else checkAnswer();
     sendAnalytics({ event: "shortcut_used", shortcut: id, mode, difficulty });
     return true;
-  }, [answer, checkAnswer, currentChord.notes, difficulty, feedback, hint.budget, hintCount, isPractice, mode, nextRound, playNotes, revealHint]);
+  }, [answer, checkAnswer, currentChord.notes, difficulty, feedback, hint.budget, hintCount, isPractice, mode, nameDeck, nameOrder, nextRound, playNaming, playNotes, revealHint, round]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -357,18 +376,39 @@ export default function Home() {
           <span>Piano Picnic</span>
         </a>
         <div className="top-actions">
+          <Link className="sheet-play-link" href={SHEET_SCAN_PATH}>Play a sheet</Link>
           <div className="star-score" aria-label={`${stars} stars earned`}><span>★</span>{stars}</div>
+          <div className="tone-picker" role="group" aria-label="Choose a piano sound">
+            {PIANO_TONES.map((option) => (
+              <button
+                key={option.id}
+                className={tone === option.id ? "active" : ""}
+                aria-pressed={tone === option.id}
+                onClick={() => {
+                  if (tone === option.id) return;
+                  toneRef.current = option.id;
+                  loadedToneRef.current = null;
+                  pianoRef.current = null;
+                  loadIdRef.current += 1;
+                  setTone(option.id);
+                  if (!muted) void getPiano().catch(() => undefined);
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <button
             className={`sound-button sound-button--${soundStatus}`}
             onClick={() => {
               if (muted || soundStatus === "error") {
                 setMuted(false);
-                void getPiano();
+                void getPiano().catch(() => undefined);
               } else setMuted(true);
             }}
-            aria-label={muted ? "Turn upright piano sound on" : "Turn sound off"}
+            aria-label={muted ? "Turn piano sound on" : "Turn sound off"}
           >
-            {soundStatus === "loading" ? "Loading piano" : soundStatus === "error" ? "Try sound" : muted ? "Sound off" : "Upright piano"}
+            {soundStatus === "loading" ? "Loading piano" : soundStatus === "error" ? "Try sound" : muted ? "Sound off" : PIANO_TONES.find((option) => option.id === tone)?.label}
             <span aria-hidden="true">{soundStatus === "loading" ? "…" : muted ? "×" : "♪"}</span>
           </button>
         </div>
@@ -380,11 +420,12 @@ export default function Home() {
           <button className={mode === "note" ? "active" : ""} aria-pressed={mode === "note"} onClick={() => switchMode("note")}><span>02</span> Find a note</button>
           <button className={mode === "see" ? "active" : ""} aria-pressed={mode === "see"} onClick={() => switchMode("see")}><span>03</span> See a chord</button>
           <button className={mode === "hear" ? "active" : ""} aria-pressed={mode === "hear"} onClick={() => switchMode("hear")}><span>04</span> Hear a chord</button>
+          <button className={mode === "name" ? "active" : ""} aria-pressed={mode === "name"} onClick={() => switchMode("name")}><span>05</span> Name it</button>
         </nav>
 
         <p className="shortcut-legend">
           <span>While you answer</span>
-          {shortcutHelp(mode).map((shortcut) => (
+          {shortcutHelp(mode, isPractice).map((shortcut) => (
             <kbd key={shortcut.id}>{shortcut.label} {shortcut.title}</kbd>
           ))}
         </p>
@@ -416,6 +457,7 @@ export default function Home() {
               {mode === "note" && "Note detective"}
               {mode === "see" && "Chord puzzle"}
               {mode === "hear" && "Listening ears"}
+              {mode === "name" && "Name what you hear"}
             </p>
             <h1>
               {mode === "learn" && !learnPractice && <>Meet <em style={{ color: currentChord.color }}>{currentChord.name}</em></>}
@@ -424,6 +466,9 @@ export default function Home() {
               {mode === "note" && <>Which note is <em>written?</em></>}
               {mode === "see" && <>Build the chord <em>you see.</em></>}
               {mode === "hear" && <>Build the chord <em>you hear.</em></>}
+              {mode === "name" && ear.deck === "note" && <>Which note did you <em>hear?</em></>}
+              {mode === "name" && ear.deck === "home" && <>Which home chord was <em>that?</em></>}
+              {mode === "name" && ear.deck === "journey" && <>Which journey did you <em>hear?</em></>}
             </h1>
             <p className="lesson-description">
               {mode === "learn" && !learnPractice && currentChord.story}
@@ -431,8 +476,35 @@ export default function Home() {
               {mode === "learn" && learnPractice && !showQuestionLabels && "Build the chord on the piano, then check it. A hint can help."}
               {mode === "note" && "Look at the note on the music staff. Tap its matching piano key."}
               {mode === "see" && "Look at all three notes. Tap the matching piano keys to build the chord."}
-              {mode === "hear" && "Press play, listen closely, then tap the three notes you heard."}
+              {mode === "hear" && hearInstruction(difficulty)}
+              {mode === "name" && nameInstruction(nameDeck, difficulty)}
             </p>
+
+            {mode === "name" && (
+              <div className="name-decks" role="group" aria-label="Choose what to name">
+                {([
+                  ["note", "Note"],
+                  ["home", "Home chord"],
+                  ["journey", "Journey"],
+                ] as const).map(([deck, label]) => (
+                  <button
+                    key={deck}
+                    className={nameDeck === deck ? "active" : ""}
+                    aria-pressed={nameDeck === deck}
+                    onClick={() => {
+                      const order = dealOrder(deckLength(deck), difficulty);
+                      setNameDeck(deck);
+                      setNameOrder(order);
+                      setRound(0);
+                      resetAnswer();
+                      void playNaming(deck, difficulty, 0, order);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {mode === "learn" && !learnPractice && (
               <div className="chord-pair" role="group" aria-label={`${currentFamily.name} home and companion chords`}>
@@ -465,28 +537,46 @@ export default function Home() {
             )}
           </div>
 
-          <div className="music-card" style={{ "--accent": currentChord.color } as React.CSSProperties}>
+          <div className="music-card" style={{ "--accent": cardColor } as React.CSSProperties}>
             <div className="music-card-top">
               <span>
                 {mode === "learn" && (showQuestionLabels ? currentChord.name : "Your turn")}
                 {mode === "note" && (showQuestionLabels ? `${noteLetter(currentNote)} · ${SOLFEGE[noteLetter(currentNote)]}` : "One mystery note")}
                 {mode === "see" && (showQuestionLabels ? currentChord.name : "Mystery chord")}
-                {mode === "hear" && (feedback === "correct" ? currentChord.name : "Listen")}
+                {mode === "hear" && (feedback === "correct" ? currentChord.name : hint.staffNotes.length > 0 && hint.hintsUsed === 0 ? "Starting note" : "Listen")}
+                {mode === "name" && (feedback === "correct" ? nameAnswerLabel(ear) : "Listen")}
               </span>
               <small>
                 {mode === "note" && "Treble clef"}
-                {mode !== "note" && mode !== "hear" && "Bass clef"}
-                {mode === "hear" && (feedback === "correct" ? "Bass clef" : hint.hintsUsed > 0 ? `Hint ${hint.hintsUsed}/${hint.budget}` : "Listen")}
+                {mode !== "note" && mode !== "hear" && mode !== "name" && "Bass clef"}
+                {mode === "hear" && (feedback === "correct" ? "Bass clef" : hint.hintsUsed > 0 ? `Hint ${hint.hintsUsed}/${hint.budget}` : hint.staffNotes.length > 0 ? "Starting note" : "Listen")}
+                {mode === "name" && (feedback === "correct" ? (ear.deck === "note" ? "Treble clef" : "Bass clef") : "Your ears")}
               </small>
             </div>
-            <Staff notes={staffNotes} hidden={staffHidden} clef={mode === "note" ? "treble" : "bass"} />
-            {mode !== "note" && mode !== "hear" && <p className={`chord-formula ${!showQuestionLabels ? "is-hidden-hint" : ""}`}>{showQuestionLabels ? prettyNotes(currentChord.notes).join("  +  ") : "Read the three notes—no name clues this time"}</p>}
+            <Staff
+              notes={staffNotes}
+              hidden={staffHidden}
+              clef={mode === "note" || (mode === "name" && ear.deck === "note") ? "treble" : "bass"}
+              signature={mode === "note" || (mode === "name" && ear.deck !== "home") ? EMPTY_SIGNATURE : cardChord.signature}
+            />
+            {mode !== "note" && mode !== "hear" && mode !== "name" && <p className={`chord-formula ${!showQuestionLabels ? "is-hidden-hint" : ""}`}>{showQuestionLabels ? prettyNotes(currentChord.notes).join("  +  ") : "Read the three notes—no name clues this time"}</p>}
             {mode === "note" && <p className={`chord-formula ${!showQuestionLabels ? "is-hidden-hint" : ""}`}>{showQuestionLabels ? `${noteLetter(currentNote)} is ${SOLFEGE[noteLetter(currentNote)]}` : "Read the note—no name clue this time"}</p>}
             {mode === "hear" && (
               <p className="chord-formula">
                 {feedback === "correct"
                   ? prettyNotes(currentChord.notes).join("  +  ")
-                  : hint.hintsUsed > 0 ? `${hint.hintsUsed} of ${hint.budget} hints used` : "No peeking—use your listening ears!"}
+                  : hint.hintsUsed === 0 && hint.staffNotes.length > 0
+                    ? "One note is written to start you off."
+                    : hint.hintsUsed > 0 ? `${hint.hintsUsed} of ${hint.budget} hints used` : "No peeking—use your listening ears!"}
+              </p>
+            )}
+            {mode === "name" && (
+              <p className="chord-formula">
+                {feedback === "correct"
+                  ? (nameChoices(ear, "seedling").find((option) => option.id === ear.answerId)?.detail || nameAnswerLabel(ear))
+                  : nameDeck === "note" && difficulty === "seedling"
+                    ? "Middle Do plays first."
+                    : "Hear it, then name it."}
               </p>
             )}
             {isPractice && feedback !== "correct" && hint.message && <p className="hint-banner" role="status">{hint.message}</p>}
@@ -495,18 +585,18 @@ export default function Home() {
 
         <div className="answer-zone">
           <div className="answer-status" aria-live="polite">
-            {feedback === "idle" && <span>{isPractice ? `${selected.length} of ${answer.length} selected` : "The glowing keys make this chord"}</span>}
-            {feedback === "incomplete" && <span className="try-again">Choose every note, then check.</span>}
-            {feedback === "incorrect" && <span className="try-again">{mode === "hear" ? "Not quite. Listen again, or ask for a hint." : "Not quite. Look again, or ask for a hint."}</span>}
-            {feedback === "correct" && <span className="correct">★ You found it! Beautiful playing.</span>}
+            {feedback === "idle" && <span>{mode === "name" ? (choice ? "Answer chosen" : "Listen, then choose") : isPractice ? `${selected.length} of ${answer.length} selected` : "The glowing keys make this chord"}</span>}
+            {feedback === "incomplete" && <span className="try-again">{mode === "name" ? "Choose an answer, then check." : "Choose every note, then check."}</span>}
+            {feedback === "incorrect" && <span className="try-again">{mode === "hear" || mode === "name" ? "Not quite. Listen again, or ask for a hint." : "Not quite. Look again, or ask for a hint."}</span>}
+            {feedback === "correct" && <span className="correct">{mode === "name" ? "★ You named it!" : "★ You found it! Beautiful playing."}</span>}
           </div>
           <div className="answer-actions">
             {isPractice && (
               <>
-                <button className="answer-tool" onClick={() => void playNotes(answer, false)} aria-label={hearTitle} aria-keyshortcuts="C">
-                  <span aria-hidden="true">▶</span> {hearTitle} <kbd>C</kbd>
+                <button className="answer-tool" onClick={() => { if (mode === "name") void playNaming(nameDeck, difficulty, round, nameOrder); else void playNotes(answer, false); }} aria-label={mode === "name" ? "Hear it" : hearTitle} aria-keyshortcuts="C">
+                  <span aria-hidden="true">▶</span> {mode === "name" ? "Hear it" : hearTitle} <kbd>C</kbd>
                 </button>
-                {mode !== "note" && (
+                {mode !== "note" && mode !== "name" && (
                   <button className="answer-tool" onClick={() => void playNotes(answer, true)} aria-label="Hear notes" aria-keyshortcuts="N">
                     <span aria-hidden="true">♪</span> Hear notes <kbd>N</kbd>
                   </button>
@@ -521,7 +611,7 @@ export default function Home() {
                   <span aria-hidden="true">◆</span> Hint {hint.hintsUsed}/{hint.budget} <kbd>H</kbd>
                 </button>
                 <button className={`check-button ${feedback === "correct" ? "next" : ""}`} onClick={feedback === "correct" ? nextRound : checkAnswer} aria-keyshortcuts="Enter">
-                  {feedback === "correct" ? "Next" : mode === "note" ? "Check note" : "Check chord"} <kbd>Enter</kbd>
+                  {feedback === "correct" ? "Next" : mode === "name" ? "Check" : mode === "note" ? "Check note" : "Check chord"} <kbd>Enter</kbd>
                 </button>
               </>
             )}
@@ -535,11 +625,42 @@ export default function Home() {
           </div>
         </div>
 
-        <Piano selected={selected} glowing={glowing} labeled={showsPianoLabels(difficulty)} onPress={handleKey} register={mode === "note" ? "treble" : "bass"} />
+        {mode === "name" && nameDeck !== "note" && (
+          <div className={`name-choices name-choices--${nameDeck}`} role="group" aria-label={nameDeck === "home" ? "Home chords" : "Journeys"}>
+            {nameChoices(ear, difficulty).map((option) => (
+              <button
+                key={option.id}
+                className={`name-choice ${choice === option.id ? "is-selected" : ""} ${heardHint.choiceId === option.id && feedback !== "correct" ? "is-glowing" : ""}`}
+                style={{ "--choice": option.color } as React.CSSProperties}
+                aria-pressed={choice === option.id}
+                onClick={() => {
+                  if (feedback === "correct") return;
+                  setChoice(option.id);
+                  setFeedback("idle");
+                  if (difficulty === "seedling") void playSoundings(choiceSchedule(difficulty, ear, option.id));
+                }}
+              >
+                <strong>{option.title}</strong>
+                {option.detail && <small>{option.detail}</small>}
+              </button>
+            ))}
+          </div>
+        )}
+        {(mode !== "name" || nameDeck === "note" || difficulty === "seedling") && (
+          <Piano
+            selected={mode === "name" && nameDeck === "note" && choice ? [choice] : selected}
+            glowing={glowing}
+            labeled={showsPianoLabels(difficulty)}
+            onPress={handleKey}
+            register={mode === "note" || (mode === "name" && nameDeck === "note") ? "treble" : "bass"}
+            whiteKeys={mode === "name" && nameDeck === "note" ? EAR_NOTES : undefined}
+            caption={mode === "name" && nameDeck === "note" ? "Tap the note you heard" : mode === "name" ? "Try playing what you heard" : "Tap the piano keys to answer"}
+          />
+        )}
       </section>
 
       <footer>
-        <p>Made for curious little musicians</p>
+        <p>Made for curious little musicians · <Link href={SHEET_SCAN_PATH}>Sheet reader</Link></p>
         <span>Listen • Look • Play · {APP_VERSION}</span>
       </footer>
     </main>

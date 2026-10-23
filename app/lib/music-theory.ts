@@ -5,11 +5,21 @@ export type NoteName = "C" | "D" | "E" | "F" | "G" | "A" | "B";
 
 export type ChordQuality = "major" | "minor" | "dominant";
 
+export type SignatureKind = "sharp" | "flat";
+
+// A key signature is the usual run of sharps or flats, not a courtesy accidental
+// on each notehead. `count` is how far along the circle of fifths it goes.
+export type KeySignature = {
+  kind: SignatureKind;
+  count: number;
+};
+
 export type Chord = {
   name: string;
   mood: string;
   quality: ChordQuality;
   root: NoteName;
+  signature: KeySignature;
   notes: string[];
   color: string;
   story: string;
@@ -80,6 +90,25 @@ export function noteLetter(note: string) {
   return note[0] as NoteName;
 }
 
+const SHARP_ORDER: NoteName[] = ["F", "C", "G", "D", "A", "E", "B"];
+const FLAT_ORDER: NoteName[] = ["B", "E", "A", "D", "G", "C", "F"];
+
+export const EMPTY_SIGNATURE: KeySignature = { kind: "sharp", count: 0 };
+
+export function signatureLetters(signature: KeySignature): NoteName[] {
+  const order = signature.kind === "sharp" ? SHARP_ORDER : FLAT_ORDER;
+  return order.slice(0, signature.count);
+}
+
+// Null when the signature already explains the note. A natural comes back only
+// when the signature would otherwise change a printed natural.
+export function noteAccidental(note: string, signature: KeySignature): "♯" | "♭" | "♮" | null {
+  const signed = signatureLetters(signature).includes(noteLetter(note));
+  if (note.includes("#")) return signature.kind === "sharp" && signed ? null : "♯";
+  if (note.includes("b")) return signature.kind === "flat" && signed ? null : "♭";
+  return signed ? "♮" : null;
+}
+
 export function noteToMidi(note: string) {
   const match = /^([A-G])([#b]?)(\d)$/.exec(note);
   if (!match) throw new Error(`Unparseable note name: ${note}`);
@@ -112,24 +141,24 @@ export function gradeAnswer(selected: string[], answer: string[]) {
 
 export const CHORDS: ChordFamily[] = [
   {
-    name: "C major", mood: "home", quality: "major", root: "C", notes: ["C3", "E3", "G3"], color: "#f3b72f", story: "Do, Mi, Sol make the home chord.",
-    companion: { name: "G7", mood: "companion", quality: "dominant", root: "G", notes: ["B2", "F3", "G3"], color: "#e29a37", story: "Ti, Fa, Sol make its companion. It wants to travel home to C major." },
+    name: "C major", mood: "home", quality: "major", root: "C", signature: { kind: "sharp", count: 0 }, notes: ["C3", "E3", "G3"], color: "#f3b72f", story: "Do, Mi, Sol make the home chord.",
+    companion: { name: "G7", mood: "companion", quality: "dominant", root: "G", signature: { kind: "sharp", count: 0 }, notes: ["B2", "F3", "G3"], color: "#e29a37", story: "Ti, Fa, Sol make its companion. It wants to travel home to C major." },
   },
   {
-    name: "G major", mood: "home", quality: "major", root: "G", notes: ["G3", "B3", "D4"], color: "#e47662", story: "Sol, Ti, Re make the home chord.",
-    companion: { name: "D7", mood: "companion", quality: "dominant", root: "D", notes: ["F#3", "C4", "D4"], color: "#c85f54", story: "Fa-sharp, Do, Re make its companion. It wants to travel home to G major." },
+    name: "G major", mood: "home", quality: "major", root: "G", signature: { kind: "sharp", count: 1 }, notes: ["G3", "B3", "D4"], color: "#e47662", story: "Sol, Ti, Re make the home chord.",
+    companion: { name: "D7", mood: "companion", quality: "dominant", root: "D", signature: { kind: "sharp", count: 1 }, notes: ["F#3", "C4", "D4"], color: "#c85f54", story: "Fa-sharp, Do, Re make its companion. It wants to travel home to G major." },
   },
   {
-    name: "F major", mood: "home", quality: "major", root: "F", notes: ["F3", "A3", "C4"], color: "#6f9d83", story: "Fa, La, Do make the home chord.",
-    companion: { name: "C7", mood: "companion", quality: "dominant", root: "C", notes: ["E3", "Bb3", "C4"], color: "#527e68", story: "Mi, Ti-flat, Do make its companion. It wants to travel home to F major." },
+    name: "F major", mood: "home", quality: "major", root: "F", signature: { kind: "flat", count: 1 }, notes: ["F3", "A3", "C4"], color: "#6f9d83", story: "Fa, La, Do make the home chord.",
+    companion: { name: "C7", mood: "companion", quality: "dominant", root: "C", signature: { kind: "flat", count: 1 }, notes: ["E3", "Bb3", "C4"], color: "#527e68", story: "Mi, Ti-flat, Do make its companion. It wants to travel home to F major." },
   },
   {
-    name: "D minor", mood: "home", quality: "minor", root: "D", notes: ["D3", "F3", "A3"], color: "#7676a8", story: "Re, Fa, La make the home chord.",
-    companion: { name: "A7", mood: "companion", quality: "dominant", root: "A", notes: ["C#3", "G3", "A3"], color: "#626293", story: "Do-sharp, Sol, La make its companion. It wants to travel home to D minor." },
+    name: "D minor", mood: "home", quality: "minor", root: "D", signature: { kind: "flat", count: 1 }, notes: ["D3", "F3", "A3"], color: "#7676a8", story: "Re, Fa, La make the home chord.",
+    companion: { name: "A7", mood: "companion", quality: "dominant", root: "A", signature: { kind: "sharp", count: 2 }, notes: ["C#3", "G3", "A3"], color: "#626293", story: "Do-sharp, Sol, La make its companion. It wants to travel home to D minor." },
   },
   {
-    name: "A minor", mood: "home", quality: "minor", root: "A", notes: ["A3", "C4", "E4"], color: "#4e8fa8", story: "La, Do, Mi make the home chord.",
-    companion: { name: "E7", mood: "companion", quality: "dominant", root: "E", notes: ["G#3", "D4", "E4"], color: "#3d748a", story: "Sol-sharp, Re, Mi make its companion. It wants to travel home to A minor." },
+    name: "A minor", mood: "home", quality: "minor", root: "A", signature: EMPTY_SIGNATURE, notes: ["A3", "C4", "E4"], color: "#4e8fa8", story: "La, Do, Mi make the home chord.",
+    companion: { name: "E7", mood: "companion", quality: "dominant", root: "E", signature: { kind: "sharp", count: 3 }, notes: ["G#3", "D4", "E4"], color: "#3d748a", story: "Sol-sharp, Re, Mi make its companion. It wants to travel home to A minor." },
   },
 ];
 

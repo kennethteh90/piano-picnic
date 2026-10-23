@@ -8,10 +8,12 @@ import {
   TREBLE_KEYS,
   getBlackKeys,
   gradeAnswer,
+  noteAccidental,
   noteLetter,
   noteToMidi as theoryMidi,
   prettyNotes,
   sameNotes,
+  signatureLetters,
   shuffledIndices,
 } from "../../app/lib/music-theory.ts";
 import { noteToMidi } from "../helpers/notes.mjs";
@@ -115,6 +117,21 @@ test("every chord spelling is well-formed and playable on the bass keyboard", ()
     }
   }
   assert.equal(CHALLENGE_CHORDS.length, CHORDS.length * 2);
+});
+
+test("every chord tone is already in its key signature", () => {
+  assert.deepEqual(signatureLetters({ kind: "sharp", count: 3 }), ["F", "C", "G"]);
+  assert.deepEqual(signatureLetters({ kind: "flat", count: 1 }), ["B"]);
+  for (const family of CHORDS) {
+    for (const chord of [family, family.companion]) {
+      for (const note of chord.notes) {
+        assert.equal(noteAccidental(note, chord.signature), null, `${chord.name} ${note} should not need a notehead accidental`);
+      }
+    }
+  }
+  const e7 = CHORDS.find((chord) => chord.companion.name === "E7").companion;
+  assert.deepEqual(e7.signature, { kind: "sharp", count: 3 });
+  assert.equal(noteAccidental("D4", { kind: "sharp", count: 4 }), "♮");
 });
 
 test("find-a-note rounds stay on the treble keyboard", () => {

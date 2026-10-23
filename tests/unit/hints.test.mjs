@@ -24,7 +24,7 @@ test("no hint is showing before the player asks", () => {
   assert.deepEqual(hint.glowNotes, []);
 });
 
-test("Seedling Find a note glows the answer, Explorer names it, Superstar only gives solfege", () => {
+test("Seedling Find a note glows the answer, Explorer names it, and Superstar only describes the staff", () => {
   const answer = ["E4"];
   const seedling = view({ mode: "note", difficulty: "seedling", answer, hintsUsed: 1 });
   assert.match(seedling.message, /glowing E · Mi/);
@@ -39,8 +39,9 @@ test("Seedling Find a note glows the answer, Explorer names it, Superstar only g
 
   const superstar = view({ mode: "note", difficulty: "superstar", answer, hintsUsed: 4 });
   assert.equal(superstar.hintsUsed, 1);
-  assert.equal(superstar.message, "Sing Mi. It is a white key.");
+  assert.equal(superstar.message, "The notehead is on the bottom line.");
   assert.equal(LETTER.test(superstar.message), false);
+  assert.equal(/Do|Re|Mi|Fa|Sol|La|Ti/.test(superstar.message), false);
   assert.deepEqual(superstar.glowNotes, []);
 });
 
@@ -67,23 +68,44 @@ test("See a chord hints get less direct as the level rises", () => {
   assert.deepEqual(superstar.glowNotes, []);
 });
 
+test("Hear a chord starts differently at each level", () => {
+  const answer = ["C3", "E3", "G3"];
+  const chord = { quality: "major", root: "C" };
+  const seedling = view({ mode: "hear", difficulty: "seedling", answer, hintsUsed: 0, chord });
+  const explorer = view({ mode: "hear", difficulty: "explorer", answer, hintsUsed: 0, chord });
+  const superstar = view({ mode: "hear", difficulty: "superstar", answer, hintsUsed: 0, chord });
+
+  assert.deepEqual(seedling.staffNotes, ["C3"]);
+  assert.deepEqual(seedling.glowNotes, ["C3"]);
+  assert.equal(seedling.message, "The lowest note is C · Do.");
+  assert.deepEqual(explorer.staffNotes, []);
+  assert.equal(explorer.message, null);
+  assert.deepEqual(explorer.glowNotes, []);
+  assert.deepEqual(superstar.staffNotes, []);
+  assert.equal(superstar.message, null);
+  assert.deepEqual(superstar.glowNotes, []);
+});
+
 test("Hear a chord reveals noteheads only when the level allows it", () => {
   const answer = ["B2", "F3", "G3"];
   const ordered = notesByPitch(answer);
   const chord = { quality: "dominant", root: "G" };
 
-  const seedling = view({ mode: "hear", difficulty: "seedling", answer, hintsUsed: 3, chord });
+  const seedling = view({ mode: "hear", difficulty: "seedling", answer, hintsUsed: 2, chord });
   assert.deepEqual(seedling.staffNotes, ordered);
   assert.match(seedling.message, /highest note is G · Sol/);
+  assert.deepEqual(seedling.glowNotes, ["G3"]);
 
   const explorer = view({ mode: "hear", difficulty: "explorer", answer, hintsUsed: 2, chord });
   assert.deepEqual(explorer.staffNotes, ordered.slice(0, 2));
   assert.equal(explorer.message, "Two notes are on the staff. The last one is for your ear.");
   assert.equal(LETTER.test(explorer.message), false);
+  assert.deepEqual(explorer.glowNotes, []);
 
   const superstar = view({ mode: "hear", difficulty: "superstar", answer, hintsUsed: 1, chord });
   assert.deepEqual(superstar.staffNotes, []);
-  assert.equal(superstar.message, "This is a dominant chord. Its home syllable is Sol.");
+  assert.equal(superstar.message, "This is a dominant chord.");
+  assert.equal(superstar.message.includes("Sol"), false);
 });
 
 test("Learn practice uses the same building hints as See a chord", () => {
@@ -106,6 +128,24 @@ test("every challenge chord keeps Superstar hints free of note names", () => {
       assert.deepEqual(hint.glowNotes, []);
       assert.deepEqual(hint.staffNotes, []);
     }
+  }
+});
+
+test("Superstar Find a note points at the staff and never names the pitch", () => {
+  const places = {
+    C4: "The notehead is on the little line below the staff.",
+    D4: "The notehead is in the space just under the staff.",
+    E4: "The notehead is on the bottom line.",
+    F4: "The notehead is in the bottom space.",
+    G4: "The notehead is on the second line.",
+    A4: "The notehead is in the second space.",
+    B4: "The notehead is on the middle line.",
+  };
+  for (const [note, message] of Object.entries(places)) {
+    const hint = view({ mode: "note", difficulty: "superstar", answer: [note], hintsUsed: 1 });
+    assert.equal(hint.message, message);
+    assert.equal(/Do|Re|Mi|Fa|Sol|La|Ti/.test(hint.message), false);
+    assert.equal(LETTER.test(hint.message), false);
   }
 });
 

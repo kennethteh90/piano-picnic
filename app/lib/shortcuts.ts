@@ -29,13 +29,21 @@ export function matchShortcut(event: { key: string; metaKey?: boolean; ctrlKey?:
 }
 
 export function shortcutApplies(id: ShortcutId, mode: GameMode, practicing: boolean) {
-  if (id === "hearNotes" && mode === "note") return false;
+  if (id === "hearNotes" && (mode === "note" || mode === "name")) return false;
   if ((id === "hint" || id === "check") && !practicing) return false;
   return true;
 }
 
-export function shortcutHelp(mode: GameMode) {
+export function shortcutHelp(mode: GameMode, practicing: boolean) {
   return SHORTCUTS
-    .filter((shortcut) => shortcutApplies(shortcut.id, mode, true))
-    .map((shortcut) => ({ ...shortcut, title: shortcut.id === "hearChord" && mode === "note" ? "Hear note" : shortcut.title }));
+    .filter((shortcut) => {
+      if (mode === "learn" && (shortcut.id === "hint" || shortcut.id === "check")) return false;
+      return shortcutApplies(shortcut.id, mode, practicing);
+    })
+    .map((shortcut) => ({
+      ...shortcut,
+      title: shortcut.id !== "hearChord"
+        ? shortcut.title
+        : mode === "note" ? "Hear note" : mode === "name" ? "Hear it" : shortcut.title,
+    }));
 }

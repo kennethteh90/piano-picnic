@@ -1,7 +1,6 @@
 import { hintBudget, type Difficulty, type GameMode } from "./difficulty.ts";
 import {
   SOLFEGE,
-  noteLetter,
   notesByPitch,
   prettyNotes,
   type ChordQuality,
@@ -77,13 +76,25 @@ function seeStep(difficulty: Difficulty, answer: string[], selected: string[], i
   return { message: `Add ${fullName(target)} next.`, staffNotes: [] as string[], glowNotes: [target] };
 }
 
+function staffPlace(note: string) {
+  const places: Record<string, string> = {
+    C4: "on the little line below the staff",
+    D4: "in the space just under the staff",
+    E4: "on the bottom line",
+    F4: "in the bottom space",
+    G4: "on the second line",
+    A4: "in the second space",
+    B4: "on the middle line",
+  };
+  return places[note.replace(/[#b]/, "")] ?? "on the staff";
+}
+
 function noteStep(difficulty: Difficulty, answer: string[], index: number) {
   const note = answer[0];
   if (!note) return { message: "Look at the staff, then tap a key.", staffNotes: [] as string[], glowNotes: [] as string[] };
-  const syllable = SOLFEGE[noteLetter(note)];
 
   if (difficulty === "superstar") {
-    return { message: `Sing ${syllable}. It is a white key.`, staffNotes: [] as string[], glowNotes: [] as string[] };
+    return { message: `The notehead is ${staffPlace(note)}.`, staffNotes: [] as string[], glowNotes: [] as string[] };
   }
   if (difficulty === "explorer") {
     if (index === 0) {
@@ -94,28 +105,40 @@ function noteStep(difficulty: Difficulty, answer: string[], index: number) {
   return { message: `Look for the glowing ${fullName(note)} key.`, staffNotes: [] as string[], glowNotes: [note] };
 }
 
+function hearOpening(difficulty: Difficulty, answer: string[]) {
+  if (difficulty !== "seedling") return { message: null as string | null, staffNotes: [] as string[], glowNotes: [] as string[] };
+  const lowest = notesByPitch(answer)[0];
+  if (!lowest) return { message: null, staffNotes: [], glowNotes: [] };
+  return {
+    message: `The lowest note is ${fullName(lowest)}.`,
+    staffNotes: [lowest],
+    glowNotes: [lowest],
+  };
+}
+
 function hearStep(difficulty: Difficulty, answer: string[], index: number, chord: HintChord) {
   const ordered = notesByPitch(answer);
   if (ordered.length === 0) return { message: "Press play and listen again.", staffNotes: [] as string[], glowNotes: [] as string[] };
 
   if (difficulty === "superstar") {
-    return { message: nudge(chord), staffNotes: [] as string[], glowNotes: [] as string[] };
+    return { message: `This is a ${qualityWord(chord.quality)} chord.`, staffNotes: [] as string[], glowNotes: [] as string[] };
   }
 
-  const revealed = ordered.slice(0, Math.min(ordered.length, index + 1));
   if (difficulty === "explorer") {
+    const revealed = ordered.slice(0, Math.min(ordered.length, index + 1));
     const message = revealed.length === 1
       ? "One note is on the staff. Match that note."
       : "Two notes are on the staff. The last one is for your ear.";
     return { message, staffNotes: revealed, glowNotes: [] as string[] };
   }
 
-  const places = ["lowest", "middle", "highest"];
-  const shown = ordered[Math.min(index, ordered.length - 1)];
+  const revealed = ordered.slice(0, Math.min(ordered.length, index + 2));
+  const shown = revealed[revealed.length - 1];
+  const place = revealed.length >= ordered.length ? "highest" : "middle";
   return {
-    message: `The ${places[Math.min(index, places.length - 1)]} note is ${fullName(shown)}.`,
+    message: `The ${place} note is ${fullName(shown)}.`,
     staffNotes: revealed,
-    glowNotes: [] as string[],
+    glowNotes: [shown],
   };
 }
 
@@ -145,6 +168,10 @@ export function hintView(input: {
   const hintsUsed = clampUsed(input.hintsUsed, budget);
   const chord = input.chord ?? EMPTY_CHORD;
   if (hintsUsed === 0) {
+    if (input.mode === "hear") {
+      const opening = hearOpening(input.difficulty, input.answer);
+      return { ...opening, hintsUsed, budget };
+    }
     return { message: null, staffNotes: [], glowNotes: [], hintsUsed, budget };
   }
 

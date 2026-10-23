@@ -51,13 +51,14 @@ test("question names stay on during a lesson and follow the level while practici
 });
 
 test("hint budgets match what each level is willing to give away", () => {
-  assert.deepEqual(DIFFICULTY_RULES.seedling.hintBudget, { learn: 3, note: 1, see: 3, hear: 3 });
-  assert.deepEqual(DIFFICULTY_RULES.explorer.hintBudget, { learn: 2, note: 2, see: 2, hear: 2 });
-  assert.deepEqual(DIFFICULTY_RULES.superstar.hintBudget, { learn: 1, note: 1, see: 1, hear: 1 });
-  for (const mode of ["learn", "see", "hear"]) {
+  assert.deepEqual(DIFFICULTY_RULES.seedling.hintBudget, { learn: 3, note: 1, see: 3, hear: 2, name: 1 });
+  assert.deepEqual(DIFFICULTY_RULES.explorer.hintBudget, { learn: 2, note: 2, see: 2, hear: 2, name: 1 });
+  assert.deepEqual(DIFFICULTY_RULES.superstar.hintBudget, { learn: 1, note: 1, see: 1, hear: 1, name: 1 });
+  for (const mode of ["learn", "see"]) {
     assert.ok(hintBudget(mode, "seedling") > hintBudget(mode, "explorer"));
     assert.ok(hintBudget(mode, "explorer") > hintBudget(mode, "superstar"));
   }
+  assert.ok(hintBudget("hear", "explorer") > hintBudget("hear", "superstar"));
 });
 
 test("Seedling deals a fixed sequence and Explorer repeats one shuffle", () => {
@@ -97,12 +98,19 @@ test("mid-deck answers advance without reshuffling", () => {
   assert.deepEqual(next, { round: 1, order: [4, 3, 2, 1, 0] });
 });
 
-test("Learn adds a sentence that the lesson order stays fixed", () => {
+test("Learn keeps the lesson order, and Hear a chord describes each level differently", () => {
   const lesson = difficultySummary("explorer", "learn");
-  const quiz = difficultySummary("explorer", "hear");
   assert.match(lesson, /introduces each key family in order/);
-  assert.equal(lesson.startsWith(quiz), true);
-  assert.notEqual(lesson, quiz);
+  assert.match(lesson, /Names hide/);
+  const hear = ["seedling", "explorer", "superstar"].map((level) => difficultySummary(level, "hear"));
+  assert.equal(new Set(hear).size, 3);
+  assert.match(hear[0], /One note starts on the staff/);
+  assert.match(hear[1], /staff starts empty/);
+  assert.match(hear[2], /keys go blank/);
+  const named = ["seedling", "explorer", "superstar"].map((level) => difficultySummary(level, "name"));
+  assert.equal(new Set(named).size, 3);
+  assert.match(named[0], /reference plays first/);
+  assert.match(named[2], /letter names hide/);
 });
 
 test("empty decks do not crash the dealer", () => {

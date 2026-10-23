@@ -12,8 +12,11 @@ const { d1, r2 } = hostingConfig;
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
 const localBindingConfig = {
+  name: "piano-codingagents",
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
+  workers_dev: false,
+  routes: [{ pattern: "piano.codingagents.cc", custom_domain: true }],
   d1_databases: d1
     ? [
         {

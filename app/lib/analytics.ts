@@ -22,7 +22,7 @@ export type AnalyticsRecord = {
 };
 
 const EVENTS = new Set<string>(ANALYTICS_EVENTS);
-const MODES = new Set<string>(["learn", "note", "see", "hear"]);
+const MODES = new Set<string>(["learn", "note", "see", "hear", "name"]);
 const LEVELS = new Set<string>(["seedling", "explorer", "superstar"]);
 const SHORTCUTS = new Set<string>(["hearChord", "hearNotes", "hint", "check"]);
 

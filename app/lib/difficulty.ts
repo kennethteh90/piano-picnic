@@ -1,7 +1,7 @@
 import { shuffledIndices } from "./music-theory.ts";
 
 export type Difficulty = "seedling" | "explorer" | "superstar";
-export type GameMode = "learn" | "note" | "see" | "hear";
+export type GameMode = "learn" | "note" | "see" | "hear" | "name";
 
 export type DifficultyRules = {
   id: Difficulty;
@@ -25,7 +25,7 @@ export const DIFFICULTY_RULES: Record<Difficulty, DifficultyRules> = {
     reshuffleOnPass: false,
     showQuestionNames: true,
     showPianoLabels: true,
-    hintBudget: { learn: 3, note: 1, see: 3, hear: 3 },
+    hintBudget: { learn: 3, note: 1, see: 3, hear: 2, name: 1 },
   },
   explorer: {
     id: "explorer",
@@ -36,7 +36,7 @@ export const DIFFICULTY_RULES: Record<Difficulty, DifficultyRules> = {
     reshuffleOnPass: false,
     showQuestionNames: false,
     showPianoLabels: true,
-    hintBudget: { learn: 2, note: 2, see: 2, hear: 2 },
+    hintBudget: { learn: 2, note: 2, see: 2, hear: 2, name: 1 },
   },
   superstar: {
     id: "superstar",
@@ -47,16 +47,32 @@ export const DIFFICULTY_RULES: Record<Difficulty, DifficultyRules> = {
     reshuffleOnPass: true,
     showQuestionNames: false,
     showPianoLabels: false,
-    hintBudget: { learn: 1, note: 1, see: 1, hear: 1 },
+    hintBudget: { learn: 1, note: 1, see: 1, hear: 1, name: 1 },
   },
 };
 
 export const DIFFICULTIES: Difficulty[] = ["seedling", "explorer", "superstar"];
 
 export function difficultySummary(difficulty: Difficulty, mode: GameMode) {
+  if (mode === "name") {
+    if (difficulty === "seedling") return "A reference plays first, the names stay on the choices, and a hint can point to the answer.";
+    if (difficulty === "explorer") return "No reference plays first, the names stay on the choices, and a hint describes what you heard.";
+    return "You hear one phrase, the letter names hide, and one hint never names the key.";
+  }
+  if (mode === "hear") {
+    if (difficulty === "seedling") return "One note starts on the staff, the keys stay named, and hints write the rest.";
+    if (difficulty === "explorer") return "The staff starts empty, the keys stay named, and each hint adds one notehead.";
+    return "The keys go blank, the staff stays empty, and one hint only says major, minor, or dominant.";
+  }
   const summary = DIFFICULTY_RULES[difficulty].summary;
   if (mode === "learn") return `${summary} The lesson still introduces each key family in order.`;
   return summary;
+}
+
+export function hearInstruction(difficulty: Difficulty) {
+  if (difficulty === "seedling") return "The lowest note is already written and its key is glowing. Listen for the other two.";
+  if (difficulty === "explorer") return "The staff starts empty. Listen, then find the notes on the named keys.";
+  return "The keys have no names and the staff stays blank. Listen for the whole chord.";
 }
 
 export function showsQuestionNames(difficulty: Difficulty, mode: GameMode, practicing: boolean) {

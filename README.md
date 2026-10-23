@@ -12,6 +12,8 @@ real sampled upright piano.
 - **See a chord** — read all three notes of a chord and build it.
 - **Hear a chord** — listen and rebuild the chord from sound alone (with
   progressive hints).
+- **Name it** — hear a note from middle Do to high Do, a home chord, or a
+  short journey, then name what you heard.
 
 The release lives at `/v1`. `/` redirects there.
 
@@ -21,7 +23,7 @@ Three challenge levels, each stricter than the last:
 - **Explorer** hides the names, shuffles the deck once, and lets each hint name one missing note. The same shuffle repeats so the set can be learned.
 - **Superstar** blanks the piano labels, reshuffles after every pass with no immediate repeat, and allows one hint that never names a key.
 
-Hints follow the game. Find a note helps you name or sing the pitch. See a chord and Learn practice point at the next missing note, or only the chord's home syllable on Superstar. Hear a chord reveals noteheads on the staff for Seedling and Explorer, and keeps the staff blank on Superstar.
+Hints follow the game. Find a note helps you name the pitch, or, on Superstar, only where the notehead sits. See a chord and Learn practice point at the next missing note, or only the chord's home syllable on Superstar. Hear a chord starts with the lowest note written on Seedling, adds one notehead per hint on Explorer, and on Superstar keeps the staff blank while one hint says only major, minor, or dominant. Name it asks the child to name what they heard. Seedling plays a reference first and leaves the piano out to try; Superstar hides the letter names.
 
 Keyboard shortcuts work while you answer, so you can stay on the piano keys: `C` hears the chord, `N` hears the notes one by one, `H` asks for a hint, and `Enter` checks.
 
@@ -107,16 +109,22 @@ Routes that never call the helpers remain anonymous-compatible.
 
 ## Attribution
 
-- Piano samples: **"Upright Piano, Yamaha"** from the
+- Upright: **"Upright Piano, Yamaha"** from the
   [Versilian Community Sample Library](https://versilian-studios.com/vcsl/) by
   Versilian Studios, licensed [CC0](https://creativecommons.org/publicdomain/zero/1.0/),
   served as ogg/m4a by the
   [smpldsnds mirror](https://github.com/smpldsnds/sgossner-vcsl).
+- Grand: public-domain Steinway samples released by Akai, mapped as
+  [Splendid Grand Piano](https://github.com/sfzinstruments/SplendidGrandPiano).
+- Organ: the drawbar organ from the
+  [MusyngKite](https://github.com/gleitz/midi-js-soundfonts) General MIDI
+  soundfont, licensed
+  [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
 - Sampler: [smplr](https://github.com/danigb/smplr) (MIT).
 - Framework: [vinext](https://github.com/cloudflare/vinext),
   [Vite](https://vite.dev), [React](https://react.dev), Tailwind CSS 4.
 
 ## License
 
-[MIT](LICENSE). The bundled game code is MIT; piano samples remain under their
-upstream CC0 terms.
+[MIT](LICENSE). The bundled game code is MIT. Upright and grand samples are
+public domain; the organ soundfont is CC BY-SA 3.0.
