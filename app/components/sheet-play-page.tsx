@@ -103,8 +103,8 @@ export default function SheetPlayPage() {
     events.forEach((event, index) => {
       const startId = window.setTimeout(() => {
         setScanStaffPreview(event);
-        setScanTrebleGlow(event.treble);
-        setScanBassGlow(event.bass);
+        setScanTrebleGlow(event.treble.filter((pitch) => !pitch.tiedFromPrevious).map((pitch) => pitch.note));
+        setScanBassGlow(event.bass.filter((pitch) => !pitch.tiedFromPrevious).map((pitch) => pitch.note));
       }, index * beatMs);
       scanTimersRef.current.push(startId);
     });
@@ -112,7 +112,7 @@ export default function SheetPlayPage() {
       setScanTrebleGlow([]);
       setScanBassGlow([]);
       setScanStaffPreview(null);
-    }, scoreLengthSeconds(events.length, beatSeconds) * 1000 + 80);
+    }, scoreLengthSeconds(events, beatSeconds) * 1000 + 80);
     scanTimersRef.current.push(endId);
     await playSoundings(scoreSchedule(events, beatSeconds));
   }, [clearScanTimers, playSoundings]);
@@ -191,7 +191,7 @@ export default function SheetPlayPage() {
             <h1>Read the music, <em>hear it play.</em></h1>
             <p className="lesson-description">
               Point the camera at piano music with treble and bass staves, or upload two or more page photos in order.
-              We read noteheads and chords, then play them on both keyboards while the keys light up.
+              We read noteheads, staccato dots, ties, and slurs, then play them on both keyboards while the keys light up.
             </p>
             <div className="scan-tempo" role="group" aria-label="Playback speed">
               <span className="scan-tempo__label">Speed</span>
@@ -226,7 +226,7 @@ export default function SheetPlayPage() {
                 <small>Treble clef</small>
               </div>
               <Staff
-                notes={scanStaffPreview?.treble ?? scannedEvents.flatMap((event) => event.treble)}
+                notes={scanStaffPreview ? scanStaffPreview.treble.map((pitch) => pitch.note) : scannedEvents.flatMap((event) => event.treble.map((pitch) => pitch.note))}
                 clef="treble"
                 signature={EMPTY_SIGNATURE}
               />
@@ -237,7 +237,7 @@ export default function SheetPlayPage() {
                 <small>Bass clef</small>
               </div>
               <Staff
-                notes={scanStaffPreview?.bass ?? scannedEvents.flatMap((event) => event.bass)}
+                notes={scanStaffPreview ? scanStaffPreview.bass.map((pitch) => pitch.note) : scannedEvents.flatMap((event) => event.bass.map((pitch) => pitch.note))}
                 clef="bass"
                 signature={EMPTY_SIGNATURE}
               />

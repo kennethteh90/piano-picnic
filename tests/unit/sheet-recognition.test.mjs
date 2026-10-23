@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mergeSheetPages, recognizeSheetFromImageData } from "../../app/lib/sheet-recognition.ts";
 
+function pitch(note, extra = {}) {
+  return { note, ...extra };
+}
+
 function fillWhite(data, width, height) {
   for (let index = 0; index < width * height * 4; index += 4) {
     data[index] = 255;
@@ -35,6 +39,27 @@ function drawFilledCircle(data, width, height, centerX, centerY, radius) {
   }
 }
 
+function drawStaccatoDot(data, width, height, centerX, centerY, lineSpacing) {
+  drawFilledCircle(data, width, height, centerX, centerY - Math.round(lineSpacing * 0.5), 3);
+}
+
+function drawTieArc(data, width, x1, y1, x2, y2, lineSpacing) {
+  const baseY = Math.min(y1, y2) - Math.round(lineSpacing * 0.2);
+  const bulge = lineSpacing * 0.38;
+  for (let x = Math.floor(x1 + lineSpacing * 0.2); x <= Math.ceil(x2 - lineSpacing * 0.2); x += 1) {
+    const t = (x - x1) / (x2 - x1);
+    const arcY = Math.round(baseY - Math.sin(t * Math.PI) * bulge);
+    for (let dy = -2; dy <= 2; dy += 1) {
+      const y = arcY + dy;
+      if (y < 0 || y >= data.length / (width * 4)) continue;
+      const index = (y * width + x) * 4;
+      data[index] = 0;
+      data[index + 1] = 0;
+      data[index + 2] = 0;
+    }
+  }
+}
+
 function drawStaff(data, width, staffTop, lineSpacing) {
   const staffLines = Array.from({ length: 5 }, (_, index) => staffTop + index * lineSpacing);
   for (const y of staffLines) drawHorizontalLine(data, width, data.length / (width * 4), y);
@@ -51,6 +76,18 @@ function syntheticTrebleMelody(notes, width = 480, height = 220) {
   for (const note of notes) {
     const y = Math.round(bottomLine - note.step * (lineSpacing / 2));
     drawFilledCircle(data, width, height, note.x, y, 7);
+    if (note.staccato) drawStaccatoDot(data, width, height, note.x, y, lineSpacing);
+  }
+  const sorted = [...notes].sort((a, b) => a.x - b.x);
+  for (let index = 0; index < sorted.length - 1; index += 1) {
+    const left = sorted[index];
+    const right = sorted[index + 1];
+    const tiePair = left.tie && left.step === right.step;
+    const slurPair = left.slur && left.step !== right.step;
+    if (!tiePair && !slurPair) continue;
+    const y1 = Math.round(bottomLine - left.step * (lineSpacing / 2));
+    const y2 = Math.round(bottomLine - right.step * (lineSpacing / 2));
+    drawTieArc(data, width, left.x, y1, right.x, y2, lineSpacing);
   }
   return { data, width, height };
 }
@@ -86,10 +123,10 @@ test("recognizes a simple treble melody from a synthetic staff image", () => {
   const result = recognizeSheetFromImageData(image);
   assert.equal(result.ok, true);
   assert.deepEqual(result.events, [
-    { treble: ["E4"], bass: [] },
-    { treble: ["F4"], bass: [] },
-    { treble: ["G4"], bass: [] },
-    { treble: ["A4"], bass: [] },
+    { treble: [pitch("E4")], bass: [] },
+    { treble: [pitch("F4")], bass: [] },
+    { treble: [pitch("G4")], bass: [] },
+    { treble: [pitch("A4")], bass: [] },
   ]);
 });
 
@@ -102,7 +139,7 @@ test("groups vertically stacked noteheads into one chord", () => {
   const result = recognizeSheetFromImageData(image);
   assert.equal(result.ok, true);
   assert.equal(result.events.length, 1);
-  assert.deepEqual(result.events[0].treble.sort(), ["E4", "G4", "B4"].sort());
+  assert.deepEqual(result.events[0].treble.map((entry) => entry.note).sort(), ["E4", "G4", "B4"].sort());
 });
 
 test("reads treble and bass staves into aligned chord events", () => {
@@ -113,21 +150,65 @@ test("reads treble and bass staves into aligned chord events", () => {
   const result = recognizeSheetFromImageData(image);
   assert.equal(result.ok, true);
   assert.equal(result.events.length, 2);
-  assert.deepEqual(result.events[0], { treble: ["G4"], bass: ["D3"] });
-  assert.deepEqual(result.events[1], { treble: ["A4"], bass: ["B2"] });
+  assert.deepEqual(result.events[0], { treble: [pitch("G4")], bass: [pitch("D3")] });
+  assert.deepEqual(result.events[1], { treble: [pitch("A4")], bass: [pitch("B2")] });
+});
+
+test("detects staccato dots on noteheads", () => {
+  const image = syntheticTrebleMelody([
+    { x: 160, step: 2, staccato: true },
+    { x: 240, step: 3 },
+  ]);
+  const result = recognizeSheetFromImageData(image);
+  assert.equal(result.ok, true);
+  assert.equal(result.events[0].treble[0]?.staccato, true);
+  assert.equal(result.events[1].treble[0]?.staccato, undefined);
+});
+
+test("detects slurs between different noteheads", () => {
+  const image = syntheticTrebleMelody([
+    { x: 140, step: 0, slur: true },
+    { x: 240, step: 1 },
+    { x: 340, step: 3 },
+  ]);
+  const result = recognizeSheetFromImageData(image);
+  assert.equal(result.ok, true);
+  assert.equal(result.events.length, 3);
+  assert.equal(result.events[0].treble[0]?.note, "E4");
+  assert.equal(result.events[0].treble[0]?.slurredToNext, true);
+  assert.equal(result.events[1].treble[0]?.note, "F4");
+  assert.equal(result.events[1].treble[0]?.slurredFromPrevious, true);
+  assert.equal(result.events[2].treble[0]?.note, "A4");
+  assert.equal(result.events[2].treble[0]?.slurredFromPrevious, undefined);
+});
+
+test("detects ties between repeated noteheads", () => {
+  const image = syntheticTrebleMelody([
+    { x: 130, step: 0, tie: true },
+    { x: 230, step: 0, tie: true },
+    { x: 330, step: 2 },
+  ]);
+  const result = recognizeSheetFromImageData(image);
+  assert.equal(result.ok, true);
+  assert.equal(result.events.length, 3);
+  assert.equal(result.events[0].treble[0]?.note, "E4");
+  assert.equal(result.events[0].treble[0]?.tiedToNext, true);
+  assert.equal(result.events[1].treble[0]?.note, "E4");
+  assert.equal(result.events[1].treble[0]?.tiedFromPrevious, true);
+  assert.equal(result.events[2].treble[0]?.note, "G4");
 });
 
 test("merges multiple page results in upload order", () => {
   const merged = mergeSheetPages([
-    { ok: true, events: [{ treble: ["C4"], bass: [] }], pages: 1 },
-    { ok: true, events: [{ treble: ["D4"], bass: ["G3"] }], pages: 1 },
+    { ok: true, events: [{ treble: [pitch("C4")], bass: [] }], pages: 1 },
+    { ok: true, events: [{ treble: [pitch("D4")], bass: [pitch("G3")] }], pages: 1 },
     { ok: false, reason: "No notes found." },
   ]);
   assert.equal(merged.ok, true);
   assert.equal(merged.pages, 2);
   assert.deepEqual(merged.events, [
-    { treble: ["C4"], bass: [] },
-    { treble: ["D4"], bass: ["G3"] },
+    { treble: [pitch("C4")], bass: [] },
+    { treble: [pitch("D4")], bass: [pitch("G3")] },
   ]);
   assert.equal(merged.warnings?.length, 1);
 });

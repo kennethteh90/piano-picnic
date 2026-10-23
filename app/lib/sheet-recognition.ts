@@ -5,9 +5,18 @@
 import { noteToMidi } from "./music-theory.ts";
 import type { Clef } from "./staff-geometry.ts";
 
+export type ScannedPitch = {
+  note: string;
+  staccato?: boolean;
+  tiedFromPrevious?: boolean;
+  tiedToNext?: boolean;
+  slurredFromPrevious?: boolean;
+  slurredToNext?: boolean;
+};
+
 export type ScannedEvent = {
-  treble: string[];
-  bass: string[];
+  treble: ScannedPitch[];
+  bass: ScannedPitch[];
 };
 
 export type SheetRecognitionSuccess = {
@@ -168,6 +177,196 @@ function noteheadScore(
   return total === 0 ? 0 : dark / total;
 }
 
+function nearStaffLine(y: number, staffLines: number[]) {
+  return staffLines.some((lineY) => Math.abs(lineY - y) <= 1);
+}
+
+function staccatoDotScore(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  lineSpacing: number,
+  noteRadius: number,
+  staffLines: number[],
+) {
+  const dotRadius = Math.max(2, Math.round(lineSpacing / 7));
+  const centerY = Math.round(y - lineSpacing * 0.5);
+  if (nearStaffLine(centerY, staffLines)) return 0;
+  if (y - centerY < noteRadius * 1.4) return 0;
+
+  const dotFill = noteheadScore(data, width, height, x, centerY, dotRadius);
+  const headScore = noteheadScore(data, width, height, x, y, noteRadius);
+  const haloScore = noteheadScore(data, width, height, x, centerY, noteRadius);
+  if (dotFill < 0.65 || headScore < 0.55) return 0;
+  if (haloScore >= headScore - 0.12) return 0;
+
+  let horizontalRun = 0;
+  let maxHorizontalRun = 0;
+  for (let dx = -Math.round(lineSpacing * 0.55); dx <= Math.round(lineSpacing * 0.55); dx += 1) {
+    if (isDark(data, width, height, x + dx, centerY)) {
+      horizontalRun += 1;
+      maxHorizontalRun = Math.max(maxHorizontalRun, horizontalRun);
+    } else horizontalRun = 0;
+  }
+  if (maxHorizontalRun > dotRadius * 2.5) return 0;
+  return dotFill;
+}
+
+function expectedTieArcY(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  lineSpacing: number,
+  x: number,
+) {
+  const baseY = Math.min(y1, y2) - Math.round(lineSpacing * 0.2);
+  const bulge = lineSpacing * 0.38;
+  const t = (x - x1) / (x2 - x1);
+  return Math.round(baseY - Math.sin(t * Math.PI) * bulge);
+}
+
+function filterArcArtifactNoteheads(
+  heads: DetectedHead[],
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  lineSpacing: number,
+  toNote: (y: number) => string | null,
+) {
+  const sorted = [...heads].sort((a, b) => a.x - b.x);
+  return heads.filter((head) => {
+    const headNote = toNote(head.y);
+    if (!headNote) return true;
+    for (let leftIndex = 0; leftIndex < sorted.length - 1; leftIndex += 1) {
+      const left = sorted[leftIndex];
+      const leftNote = toNote(left.y);
+      if (!leftNote) continue;
+      for (let rightIndex = leftIndex + 1; rightIndex < sorted.length; rightIndex += 1) {
+        const right = sorted[rightIndex];
+        const rightNote = toNote(right.y);
+        if (!rightNote) continue;
+        if (head.x <= left.x || head.x >= right.x) continue;
+        const arc = phraseArcScore(data, width, height, left.x, left.y, right.x, right.y, lineSpacing);
+        if (arc < 0.15) continue;
+        const arcY = expectedTieArcY(left.x, left.y, right.x, right.y, lineSpacing, head.x);
+        if (Math.abs(head.y - arcY) > lineSpacing * 0.45) continue;
+        if (leftNote === rightNote) {
+          if (headNote !== leftNote) return false;
+          continue;
+        }
+        if (headNote !== leftNote && headNote !== rightNote) return false;
+      }
+    }
+    return true;
+  });
+}
+
+function phraseArcScore(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  lineSpacing: number,
+  maxPitchDelta = lineSpacing * 4,
+  sampleRadius = 2,
+) {
+  if (x2 - x1 < lineSpacing * 0.35) return 0;
+  if (Math.abs(y1 - y2) > maxPitchDelta) return 0;
+  const baseY = Math.min(y1, y2) - Math.round(lineSpacing * 0.2);
+  const bulge = lineSpacing * 0.38;
+  let dark = 0;
+  let total = 0;
+  for (let x = Math.floor(x1 + lineSpacing * 0.2); x <= Math.ceil(x2 - lineSpacing * 0.2); x += 1) {
+    const t = (x - x1) / (x2 - x1);
+    const arcY = Math.round(baseY - Math.sin(t * Math.PI) * bulge);
+    for (let dy = -sampleRadius; dy <= sampleRadius; dy += 1) {
+      total += 1;
+      if (isDark(data, width, height, x, arcY + dy)) dark += 1;
+    }
+  }
+  return total === 0 ? 0 : dark / total;
+}
+
+function tieArcScore(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  lineSpacing: number,
+) {
+  return phraseArcScore(data, width, height, x1, y1, x2, y2, lineSpacing, lineSpacing * 0.3, 1);
+}
+
+function markTies(
+  heads: DetectedHead[],
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  lineSpacing: number,
+  toNote: (y: number) => string | null,
+) {
+  const sorted = [...heads].sort((a, b) => a.x - b.x);
+  for (let index = 0; index < sorted.length; index += 1) {
+    const left = sorted[index];
+    const leftNote = toNote(left.y);
+    if (!leftNote) continue;
+    for (let rightIndex = index + 1; rightIndex < sorted.length; rightIndex += 1) {
+      const right = sorted[rightIndex];
+      const rightNote = toNote(right.y);
+      if (rightNote !== leftNote) continue;
+      if (right.x - left.x > lineSpacing * 6) break;
+      const arc = tieArcScore(data, width, height, left.x, left.y, right.x, right.y, lineSpacing);
+      if (arc < 0.2) continue;
+      left.tiedToNext = true;
+      right.tiedFromPrevious = true;
+      break;
+    }
+  }
+}
+
+function markSlurs(
+  heads: DetectedHead[],
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  lineSpacing: number,
+  toNote: (y: number) => string | null,
+) {
+  const sorted = [...heads].sort((a, b) => a.x - b.x);
+  for (let index = 0; index < sorted.length - 1; index += 1) {
+    const left = sorted[index];
+    const right = sorted[index + 1];
+    const leftNote = toNote(left.y);
+    const rightNote = toNote(right.y);
+    if (!leftNote || !rightNote || leftNote === rightNote) continue;
+    if (left.tiedToNext || right.tiedFromPrevious) continue;
+    if (right.x - left.x > lineSpacing * 7) continue;
+    const arc = phraseArcScore(data, width, height, left.x, left.y, right.x, right.y, lineSpacing);
+    if (arc < 0.32) continue;
+    left.slurredToNext = true;
+    right.slurredFromPrevious = true;
+  }
+}
+
+type DetectedHead = {
+  x: number;
+  y: number;
+  staccato: boolean;
+  tiedFromPrevious?: boolean;
+  tiedToNext?: boolean;
+  slurredFromPrevious?: boolean;
+  slurredToNext?: boolean;
+};
+
 function detectNoteheads(
   data: Uint8ClampedArray,
   width: number,
@@ -179,7 +378,7 @@ function detectNoteheads(
   const lineSpacing = (bottom - top) / 4;
   const radius = Math.max(2, Math.round(lineSpacing / 5));
   const threshold = 0.4;
-  const candidates: { x: number; y: number }[] = [];
+  const candidates: DetectedHead[] = [];
 
   for (let x = Math.round(lineSpacing); x < width - lineSpacing; x += Math.max(2, Math.round(lineSpacing / 6))) {
     for (let y = Math.round(top - lineSpacing); y <= Math.round(bottom + lineSpacing); y += 1) {
@@ -190,16 +389,20 @@ function detectNoteheads(
       const above = noteheadScore(data, width, height, x, y - 1, radius);
       const below = noteheadScore(data, width, height, x, y + 1, radius);
       if (score < above || score < below) continue;
-      candidates.push({ x, y });
+      candidates.push({ x, y, staccato: false });
     }
   }
 
-  const deduped: { x: number; y: number }[] = [];
+  const deduped: DetectedHead[] = [];
   for (const point of candidates) {
     const duplicate = deduped.find(
       (other) => Math.abs(other.x - point.x) <= radius && Math.abs(other.y - point.y) <= radius,
     );
     if (!duplicate) deduped.push(point);
+  }
+  for (const head of deduped) {
+    head.staccato =
+      staccatoDotScore(data, width, height, head.x, head.y, lineSpacing, radius, staffLines) > 0;
   }
   return deduped;
 }
@@ -223,9 +426,23 @@ function clefForStaff(staff: number[], systems: number[][], imageHeight: number)
   return systems.indexOf(staff) === 0 ? "treble" : "bass";
 }
 
-type TimedNotes = { x: number; notes: string[] };
+type TimedNotes = { x: number; notes: ScannedPitch[] };
 
-function groupTimedNotes(heads: { x: number; y: number }[], lineSpacing: number, toNote: (y: number) => string | null) {
+function toPitch(head: DetectedHead, note: string): ScannedPitch {
+  const pitch: ScannedPitch = { note };
+  if (head.staccato) pitch.staccato = true;
+  if (head.tiedFromPrevious) pitch.tiedFromPrevious = true;
+  if (head.tiedToNext) pitch.tiedToNext = true;
+  if (head.slurredFromPrevious) pitch.slurredFromPrevious = true;
+  if (head.slurredToNext) pitch.slurredToNext = true;
+  return pitch;
+}
+
+function groupTimedNotes(
+  heads: DetectedHead[],
+  lineSpacing: number,
+  toNote: (y: number) => string | null,
+) {
   const sorted = [...heads].sort((a, b) => a.x - b.x);
   const groups: TimedNotes[] = [];
   const bucket = lineSpacing * 0.55;
@@ -235,10 +452,20 @@ function groupTimedNotes(heads: { x: number; y: number }[], lineSpacing: number,
     if (!note) continue;
     const group = groups.find((entry) => Math.abs(entry.x - head.x) < bucket);
     if (!group) {
-      groups.push({ x: head.x, notes: [note] });
+      groups.push({ x: head.x, notes: [toPitch(head, note)] });
       continue;
     }
-    if (!group.notes.includes(note)) group.notes.push(note);
+    const existing = group.notes.find((pitch) => pitch.note === note);
+    if (existing) {
+      if (head.staccato) existing.staccato = true;
+      if (head.tiedFromPrevious) existing.tiedFromPrevious = true;
+      if (head.tiedToNext) existing.tiedToNext = true;
+      if (head.slurredFromPrevious) existing.slurredFromPrevious = true;
+      if (head.slurredToNext) existing.slurredToNext = true;
+      group.x = Math.round((group.x + head.x) / 2);
+      continue;
+    }
+    group.notes.push(toPitch(head, note));
     group.x = Math.round((group.x + head.x) / 2);
   }
 
@@ -255,8 +482,8 @@ function mergeGrandStaffEvents(treble: TimedNotes[], bass: TimedNotes[], toleran
   }
 
   return clusters.map((x) => ({
-    treble: treble.find((entry) => Math.abs(entry.x - x) < tolerance)?.notes ?? [],
-    bass: bass.find((entry) => Math.abs(entry.x - x) < tolerance)?.notes ?? [],
+    treble: treble.find((entry) => Math.abs(entry.x - x) < tolerance)?.notes ?? [] as ScannedPitch[],
+    bass: bass.find((entry) => Math.abs(entry.x - x) < tolerance)?.notes ?? [] as ScannedPitch[],
   })).filter((event) => event.treble.length > 0 || event.bass.length > 0);
 }
 
@@ -271,7 +498,7 @@ function collapseDuplicateEvents(events: ScannedEvent[]) {
 }
 
 function sameEvent(a: ScannedEvent, b: ScannedEvent) {
-  return a.treble.join() === b.treble.join() && a.bass.join() === b.bass.join();
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 export function recognizeSheetFromImageData(image: RasterImage): SheetRecognitionResult {
@@ -294,12 +521,12 @@ export function recognizeSheetFromImageData(image: RasterImage): SheetRecognitio
     const lineSpacing = (staff[4] - staff[0]) / 4;
     mergeTolerance = Math.max(mergeTolerance, lineSpacing * 0.65);
     const clef = clefForStaff(staff, systems, height);
-    const heads = detectNoteheads(data, width, height, staff).filter((head) => staffForPoint(head.y, systems) === staff);
-    const timed = groupTimedNotes(
-      heads,
-      lineSpacing,
-      (y) => clampNote(pitchFromStaff(clef, staff[4], lineSpacing, y), clef),
-    );
+    const toNote = (y: number) => clampNote(pitchFromStaff(clef, staff[4], lineSpacing, y), clef);
+    let heads = detectNoteheads(data, width, height, staff).filter((head) => staffForPoint(head.y, systems) === staff);
+    heads = filterArcArtifactNoteheads(heads, data, width, height, lineSpacing, toNote);
+    markTies(heads, data, width, height, lineSpacing, toNote);
+    markSlurs(heads, data, width, height, lineSpacing, toNote);
+    const timed = groupTimedNotes(heads, lineSpacing, toNote);
     if (clef === "treble") trebleTimed.push(...timed);
     else bassTimed.push(...timed);
   }
