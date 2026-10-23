@@ -692,8 +692,11 @@ footer p { margin: 0; }
   .difficulty-bar { align-items: flex-start; flex-direction: column; margin-bottom: 36px; gap: 10px; }
   .difficulty-options { width: 100%; }
   .difficulty-options button { flex: 1; }
-  .lesson-grid { grid-template-columns: 1fr; gap: 34px; }
+  .lesson-grid,
+  .scan-layout { grid-template-columns: 1fr; gap: 28px; min-height: 0; align-items: stretch; }
   .music-card { width: min(500px, 96%); margin: 0 auto; }
+  .sheet-play-app .music-card { width: 100%; }
+  .sheet-scanner__preview { max-width: none; }
   .answer-zone { margin-top: 38px; }
   .piano-shell { margin-left: -4vw; margin-right: -4vw; padding: 12px 7px 10px; }
   .piano { height: 175px; }
@@ -932,6 +935,157 @@ footer p { margin: 0; }
   .black-key strong { font-size: .46rem; }
   .keyboard-caption { display: none; }
   footer { display: none; }
+}
+
+/* Sheet reader: scroll on phone instead of cramming a two-column desktop layout. */
+@media (max-width: 540px) {
+  html:has(.sheet-play-app),
+  body:has(.sheet-play-app) {
+    height: auto;
+    min-height: 100dvh;
+    overflow: auto;
+    overscroll-behavior: auto;
+  }
+
+  main.sheet-play-app {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .sheet-play-app .topbar {
+    flex-wrap: wrap;
+    min-height: 52px;
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .sheet-play-app .top-actions {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+  .sheet-play-app .tone-picker button { padding: 6px 8px; font-size: .64rem; }
+
+  .sheet-play-app .game.sheet-play {
+    display: block;
+    flex: none;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 8px 12px 0;
+    overflow: visible;
+  }
+
+  .sheet-play-app .scan-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sheet-play-app .eyebrow {
+    display: block;
+    margin: 0 0 6px;
+    font-size: .62rem;
+  }
+  .sheet-play-app h1 {
+    max-width: none;
+    margin: 0 0 8px;
+    font-size: 1.65rem;
+    line-height: 1.05;
+    text-align: left;
+  }
+  .sheet-play-app .lesson-description {
+    display: block;
+    margin: 0 0 10px;
+    font-size: .86rem;
+    line-height: 1.45;
+    max-width: none;
+  }
+
+  .sheet-play-app .scan-tempo { margin: 0 0 8px; }
+  .sheet-play-app .scan-tempo button { padding: 8px 12px; }
+
+  .sheet-play-app .sheet-scanner { margin-top: 0; }
+  .sheet-play-app .sheet-scanner__preview {
+    width: 100%;
+    max-width: none;
+    aspect-ratio: 3 / 4;
+    border-radius: 14px;
+  }
+  .sheet-play-app .sheet-scanner__message {
+    max-width: none;
+    margin-top: 10px;
+    font-size: .88rem;
+  }
+  .sheet-play-app .sheet-scanner__actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .sheet-play-app .sheet-scanner__actions .primary-action,
+  .sheet-play-app .sheet-scanner__actions .text-action {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .sheet-play-app .scan-staves {
+    gap: 10px;
+    padding: 4px 0 8px;
+  }
+  .sheet-play-app .scan-staves .music-card {
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px 10px;
+    transform: none;
+  }
+  .sheet-play-app .scan-staves .staff {
+    width: 125%;
+    height: 150px;
+    margin: 2px -12.5% -36px;
+    transform: scale(.8);
+    transform-origin: top center;
+  }
+  .sheet-play-app .scan-staves__caption {
+    font-size: .72rem;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  .sheet-play-app .scan-keyboards {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    gap: 4px;
+    margin: 0 -12px;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, var(--cream) 88%, rgba(245, 240, 230, 0));
+    border-top: 1px solid rgba(36, 49, 40, .12);
+  }
+  .sheet-play-app .scan-keyboards .piano-shell {
+    margin: 0;
+    padding: 6px 4px 4px;
+    box-shadow: 0 4px 14px rgba(37, 43, 38, .12);
+  }
+  .sheet-play-app .scan-keyboards .piano {
+    height: clamp(72px, 11dvh, 96px);
+  }
+  .sheet-play-app .scan-keyboards .solfege { display: none; }
+  .sheet-play-app .scan-keyboards .white-key { padding-bottom: 5px; }
+  .sheet-play-app .scan-keyboards .white-key strong { font-size: .62rem; }
+  .sheet-play-app .scan-keyboards .black-key { height: 52%; }
+  .sheet-play-app .scan-keyboards .black-key strong { font-size: .44rem; }
+  .sheet-play-app .scan-keyboards .keyboard-caption { display: none; }
+
+  .sheet-play-app footer {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 12px 18px;
+    font-size: .62rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

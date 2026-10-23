@@ -140,7 +140,7 @@ export default function SheetPlayPage() {
   useEffect(() => () => clearScanTimers(), [clearScanTimers]);
 
   return (
-    <main>
+    <main className="sheet-play-app">
       <header className="topbar">
         <Link className="brand" href={RELEASE_PATH} aria-label="Back to Piano Picnic games">
           <span className="brand-mark"><i /><i /><i /></span>
