@@ -300,24 +300,32 @@ kbd {
   max-width: 520px;
   box-shadow: 0 12px 28px rgba(36, 49, 40, .18);
 }
-.sheet-scanner__video,
-.sheet-scanner__placeholder {
+.sheet-scanner__video {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  background: #1f2621;
 }
 .sheet-scanner__placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: grid;
   place-items: center;
   color: #cad1cb;
   font-weight: 700;
   gap: 8px;
+  background: #1f2621;
 }
 .sheet-scanner__placeholder span { font-size: 2.4rem; }
 .sheet-scanner__guide {
   position: absolute;
   inset: 12% 8%;
+  z-index: 3;
   border: 2px dashed rgba(243, 183, 47, .75);
   border-radius: 12px;
   pointer-events: none;
@@ -327,6 +335,26 @@ kbd {
   max-width: 520px;
   line-height: 1.45;
   color: rgba(36, 49, 40, .82);
+}
+.sheet-scanner__progress-bar {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  height: 8px;
+  margin: 10px 0 0;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(36, 49, 40, .12);
+  accent-color: var(--green);
+}
+.sheet-scanner__progress-bar::-webkit-progress-bar {
+  background: rgba(36, 49, 40, .12);
+  border-radius: 999px;
+}
+.sheet-scanner__progress-bar::-webkit-progress-value {
+  background: var(--green);
+  border-radius: 999px;
 }
 .sheet-scanner__actions {
   display: flex;

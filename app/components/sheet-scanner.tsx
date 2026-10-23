@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { rasterFromImageFile, rasterFromVideoFrame } from "../lib/sheet-image";
-import { mergeSheetPages, recognizeSheetFromImageData, type SheetRecognitionResult } from "../lib/sheet-recognition";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { sheetScanProgressValue } from "../lib/sheet-scan-progress";
+import { mergePageResults, progressMessage, recognizeCameraFrame, recognizeUploadedPages, type SheetScanProgress } from "../lib/sheet-scan-run";
+import type { SheetRecognitionResult } from "../lib/sheet-recognition";
 
 type ScannerStatus = "idle" | "camera" | "scanning" | "error";
 
@@ -18,6 +19,14 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<ScannerStatus>("idle");
   const [message, setMessage] = useState("Use the camera or upload page photos in order (page 1, then page 2).");
+  const [scanProgress, setScanProgress] = useState<SheetScanProgress | null>(null);
+
+  const applyProgress = useCallback((progress: SheetScanProgress) => {
+    setScanProgress(progress);
+    setMessage(progressMessage(progress));
+  }, []);
+
+  const clearProgress = useCallback(() => setScanProgress(null), []);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -25,7 +34,45 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
+  const attachCameraStream = useCallback(async () => {
+    const stream = streamRef.current;
+    const video = videoRef.current;
+    if (!stream || !video) return false;
+    if (video.srcObject !== stream) video.srcObject = stream;
+
+    const waitForFrame = () =>
+      new Promise<boolean>((resolve) => {
+        if (video.videoWidth > 0) {
+          resolve(true);
+          return;
+        }
+        const onReady = () => {
+          video.removeEventListener("loadeddata", onReady);
+          resolve(video.videoWidth > 0);
+        };
+        video.addEventListener("loadeddata", onReady);
+        window.setTimeout(() => {
+          video.removeEventListener("loadeddata", onReady);
+          resolve(video.videoWidth > 0);
+        }, 2500);
+      });
+
+    try {
+      await video.play();
+      return await waitForFrame();
+    } catch {
+      return false;
+    }
+  }, []);
+
   useEffect(() => () => stopCamera(), [stopCamera]);
+
+  const previewLive = status === "camera" || status === "scanning";
+
+  useLayoutEffect(() => {
+    if (!previewLive || !streamRef.current) return;
+    void attachCameraStream();
+  }, [attachCameraStream, previewLive]);
 
   const publishResult = useCallback((result: SheetRecognitionResult, append = false, keepCamera = false) => {
     onResult(result, { append });
@@ -42,9 +89,15 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
         : `Read ${pages} page${pages === 1 ? "" : "s"} · ${result.events.length} chord${result.events.length === 1 ? "" : "s"} in order.${warning}`,
     );
     setStatus(keepCamera ? "camera" : "idle");
-  }, [onResult]);
+    clearProgress();
+  }, [clearProgress, onResult]);
 
   const startCamera = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus("error");
+      setMessage("This browser cannot use the camera here. Try Upload pages instead.");
+      return;
+    }
     setMessage("Allow camera access, then line up the staff.");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -52,13 +105,11 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       setStatus("camera");
       setMessage("Hold the page steady. Frame both staves if you can.");
     } catch {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       setStatus("error");
       setMessage("Camera access is blocked. Check browser permissions or upload page photos instead.");
     }
@@ -66,18 +117,29 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
 
   const captureFrame = useCallback(async (append: boolean) => {
     const video = videoRef.current;
-    if (!video || video.videoWidth === 0) return;
+    if (!video || !streamRef.current) {
+      setStatus("error");
+      setMessage("Camera is not ready. Close and open the camera again.");
+      return;
+    }
+    if (video.videoWidth === 0) {
+      const ready = await attachCameraStream();
+      if (!ready || video.videoWidth === 0) {
+        setStatus("error");
+        setMessage("Camera preview is still starting. Wait a moment, then try Scan & play again.");
+        return;
+      }
+    }
     setStatus("scanning");
-    setMessage("Reading the notes…");
     try {
-      const image = await rasterFromVideoFrame(video);
-      const result = recognizeSheetFromImageData(image);
+      const result = await recognizeCameraFrame(video, applyProgress);
       publishResult(result, append && hasScore, true);
     } catch {
+      clearProgress();
       setStatus("error");
       setMessage("Could not read that image. Try another photo.");
     }
-  }, [hasScore, publishResult]);
+  }, [applyProgress, attachCameraStream, clearProgress, hasScore, publishResult]);
 
   const handleFiles = useCallback((fileList: FileList | null, append: boolean) => {
     if (!fileList || fileList.length === 0) return;
@@ -90,22 +152,19 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
 
     void (async () => {
       setStatus("scanning");
-      const results: SheetRecognitionResult[] = [];
-      for (const [index, file] of files.entries()) {
-        setMessage(`Reading page ${index + 1} of ${files.length}…`);
-        try {
-          const image = await rasterFromImageFile(file);
-          results.push(recognizeSheetFromImageData(image));
-        } catch {
-          results.push({ ok: false, reason: "Could not load that image." });
-        }
+      try {
+        const results = await recognizeUploadedPages(files, applyProgress);
+        const merged = await mergePageResults(results, applyProgress);
+        const shouldAppend = append && hasScore && merged.ok;
+        publishResult(merged, shouldAppend, false);
+        stopCamera();
+      } catch {
+        clearProgress();
+        setStatus("error");
+        setMessage("Could not read those images. Try again.");
       }
-      const merged = mergeSheetPages(results);
-      const shouldAppend = append && hasScore && merged.ok;
-      publishResult(merged, shouldAppend, false);
-      stopCamera();
     })();
-  }, [hasScore, publishResult, stopCamera]);
+  }, [applyProgress, clearProgress, hasScore, publishResult, stopCamera]);
 
   return (
     <div className="sheet-scanner">
@@ -133,17 +192,32 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
       />
 
       <div className="sheet-scanner__preview">
-        {status === "idle" || status === "error" ? (
+        <video
+          ref={videoRef}
+          className="sheet-scanner__video"
+          playsInline
+          muted
+          autoPlay
+          aria-hidden={!previewLive}
+          aria-label="Camera preview of sheet music"
+        />
+        {!previewLive ? (
           <div className="sheet-scanner__placeholder" aria-hidden="true">
             <span>📷</span>
             <p>Camera or page photos</p>
           </div>
-        ) : (
-          <video ref={videoRef} className="sheet-scanner__video" playsInline muted aria-label="Camera preview of sheet music" />
-        )}
-        <div className="sheet-scanner__guide" aria-hidden="true" />
+        ) : null}
+        {previewLive ? <div className="sheet-scanner__guide" aria-hidden="true" /> : null}
       </div>
       <p className="sheet-scanner__message" role="status">{message}</p>
+      {status === "scanning" && scanProgress && (
+        <progress
+          className="sheet-scanner__progress-bar"
+          aria-label={message}
+          max={100}
+          value={Math.round(sheetScanProgressValue(scanProgress.page, scanProgress.pageCount, scanProgress.phase) * 100)}
+        />
+      )}
       <div className="sheet-scanner__actions">
         {status === "idle" || status === "error" ? (
           <>
