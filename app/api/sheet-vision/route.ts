@@ -1,4 +1,6 @@
 import { parseVisionRequestBody } from "../../lib/sheet-vision-parse.ts";
+import { sheetVisionRateLimitKv } from "../../lib/sheet-vision-env.ts";
+import { consumeSheetVisionRateLimit, hourlyLimitFromEnv } from "../../lib/sheet-vision-ratelimit.ts";
 import { recognizeWithVisionProvider, resolveSheetVisionProvider } from "../../lib/sheet-vision-provider.ts";
 import { SHEET_VISION_MAX_BODY_BYTES, SHEET_VISION_MAX_IMAGE_BYTES } from "../../lib/sheet-vision-types.ts";
 
@@ -18,6 +20,24 @@ export async function POST(request: Request) {
   const parsed = parseVisionRequestBody(body, SHEET_VISION_MAX_IMAGE_BYTES);
   if (!parsed.ok) {
     return Response.json({ ok: false, reason: parsed.error }, { status: 400 });
+  }
+
+  const rateKv = sheetVisionRateLimitKv();
+  if (rateKv) {
+    const limited = await consumeSheetVisionRateLimit(rateKv, request, hourlyLimitFromEnv());
+    if (!limited.ok) {
+      return Response.json(
+        {
+          ok: false,
+          reason: `Enhanced read limit reached (${hourlyLimitFromEnv()} per hour). Try on-device scan or wait a bit.`,
+          status: 429,
+        },
+        {
+          status: 429,
+          headers: { "retry-after": String(limited.retryAfterSeconds) },
+        },
+      );
+    }
   }
 
   const resolved = resolveSheetVisionProvider();

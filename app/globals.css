@@ -370,6 +370,21 @@ kbd {
   outline: 3px solid rgba(243, 183, 47, .9);
   outline-offset: 3px;
 }
+.sheet-scanner__privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  max-width: 520px;
+  font-size: .86rem;
+  line-height: 1.4;
+  color: #536057;
+  cursor: pointer;
+}
+.sheet-scanner__privacy input {
+  margin-top: 3px;
+  accent-color: var(--green);
+}
 .sheet-scanner__message {
   margin: 14px 0 0;
   max-width: 520px;

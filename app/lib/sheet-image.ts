@@ -59,3 +59,24 @@ export async function rasterFromVideoFrame(video: HTMLVideoElement): Promise<Ras
   const frame = context.getImageData(0, 0, canvas.width, canvas.height);
   return limitRasterForOmr({ data: frame.data, width: frame.width, height: frame.height });
 }
+
+export async function rasterToJpegBase64(image: RasterImage, quality = 0.82) {
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not encode the image.");
+  const source = document.createElement("canvas");
+  source.width = image.width;
+  source.height = image.height;
+  source.getContext("2d", { willReadFrequently: true })?.putImageData(
+    new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
+    0,
+    0,
+  );
+  context.drawImage(source, 0, 0);
+  const dataUrl = canvas.toDataURL("image/jpeg", quality);
+  const base64 = dataUrl.split(",")[1];
+  if (!base64) throw new Error("Could not encode the image.");
+  return { base64, mime: "image/jpeg" as const };
+}

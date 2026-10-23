@@ -20,6 +20,7 @@ export type SheetVisionSuccess = {
 export type SheetVisionFailure = {
   ok: false;
   reason: string;
+  status?: number;
 };
 
 export type SheetVisionResult = SheetVisionSuccess | SheetVisionFailure;

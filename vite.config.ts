@@ -6,7 +6,12 @@ import { sites } from "./build/sites-vite-plugin";
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
-const { d1, r2 } = hostingConfig;
+const hosting = hostingConfig as {
+  d1?: string | null;
+  r2?: string | null;
+  vision_rate_kv_id?: string;
+};
+const { d1, r2, vision_rate_kv_id: visionRateKvId } = hosting;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
@@ -34,6 +39,12 @@ const localBindingConfig = {
         },
       ]
     : [],
+  kv_namespaces: [
+    {
+      binding: "SHEET_VISION_RATELIMIT",
+      id: visionRateKvId ?? "00000000-0000-4000-8000-000000000002",
+    },
+  ],
 };
 
 export default defineConfig(async () => {

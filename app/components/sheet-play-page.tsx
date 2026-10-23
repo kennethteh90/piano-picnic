@@ -191,7 +191,7 @@ export default function SheetPlayPage() {
             <h1>Read the music, <em>hear it play.</em></h1>
             <p className="lesson-description">
               Point the camera at piano music with treble and bass staves, or upload two or more page photos in order.
-              We read noteheads, staccato dots, ties, and slurs, then play them on both keyboards while the keys light up.
+              Scans use enhanced read (Gemini) by default; tick on-device only to keep images private. We play treble and bass on both keyboards while keys light up.
             </p>
             <div className="scan-tempo" role="group" aria-label="Playback speed">
               <span className="scan-tempo__label">Speed</span>

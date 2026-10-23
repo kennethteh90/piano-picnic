@@ -20,6 +20,7 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
   const [status, setStatus] = useState<ScannerStatus>("idle");
   const [message, setMessage] = useState("Use the camera or upload page photos in order (page 1, then page 2).");
   const [scanProgress, setScanProgress] = useState<SheetScanProgress | null>(null);
+  const [preferLocalScan, setPreferLocalScan] = useState(false);
 
   const applyProgress = useCallback((progress: SheetScanProgress) => {
     setScanProgress(progress);
@@ -132,14 +133,14 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
     }
     setStatus("scanning");
     try {
-      const result = await recognizeCameraFrame(video, applyProgress);
+      const result = await recognizeCameraFrame(video, applyProgress, { preferLocal: preferLocalScan });
       publishResult(result, append && hasScore, true);
     } catch {
       clearProgress();
       setStatus("error");
       setMessage("Could not read that image. Try another photo.");
     }
-  }, [applyProgress, attachCameraStream, clearProgress, hasScore, publishResult]);
+  }, [applyProgress, attachCameraStream, clearProgress, hasScore, preferLocalScan, publishResult]);
 
   const handleFiles = useCallback((fileList: FileList | null, append: boolean) => {
     if (!fileList || fileList.length === 0) return;
@@ -153,7 +154,7 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
     void (async () => {
       setStatus("scanning");
       try {
-        const results = await recognizeUploadedPages(files, applyProgress);
+        const results = await recognizeUploadedPages(files, applyProgress, { preferLocal: preferLocalScan });
         const merged = await mergePageResults(results, applyProgress);
         const shouldAppend = append && hasScore && merged.ok;
         publishResult(merged, shouldAppend, false);
@@ -164,7 +165,7 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
         setMessage("Could not read those images. Try again.");
       }
     })();
-  }, [applyProgress, clearProgress, hasScore, publishResult, stopCamera]);
+  }, [applyProgress, clearProgress, hasScore, preferLocalScan, publishResult, stopCamera]);
 
   return (
     <div className="sheet-scanner">
@@ -221,6 +222,15 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
           </div>
         )}
       </div>
+      <label className="sheet-scanner__privacy">
+        <input
+          type="checkbox"
+          checked={preferLocalScan}
+          onChange={(event) => setPreferLocalScan(event.target.checked)}
+          disabled={status === "scanning"}
+        />
+        <span>On-device scan only (image stays on your phone)</span>
+      </label>
       <p className="sheet-scanner__message" role="status">{message}</p>
       {status === "scanning" && scanProgress && (
         <progress

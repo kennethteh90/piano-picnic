@@ -7,5 +7,6 @@ declare namespace Cloudflare {
   interface Env {
     ASSETS?: Fetcher;
     DB?: D1Database;
+    SHEET_VISION_RATELIMIT?: KVNamespace;
   }
 }

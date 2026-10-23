@@ -20,9 +20,11 @@ export async function fetchSheetVision(options: SheetVisionClientOptions): Promi
   });
 
   const payload = await response.json() as SheetVisionResult;
-  if (!response.ok && payload.ok === false) return payload;
+  if (!response.ok && payload.ok === false) {
+    return { ...payload, status: response.status };
+  }
   if (!response.ok) {
-    return { ok: false, reason: "Enhanced read is unavailable right now." };
+    return { ok: false, reason: "Enhanced read is unavailable right now.", status: response.status };
   }
   return payload;
 }

@@ -23,8 +23,8 @@ Gemini Flash → JSON only
 Client uses result when "Enhanced read" is on; else local OMR
 ```
 
-**Default scan:** local `recognizeSheetFromImageData` (on device, no upload).  
-**Enhanced read:** `fetchSheetVision` in `app/lib/sheet-vision-client.ts`.
+**Default scan:** enhanced read via `POST /api/sheet-vision` (Gemini). On API errors, the client falls back to local OMR. Users can enable **On-device scan only** in the UI.  
+**Rate limit:** 50 requests per IP per hour (KV binding `SHEET_VISION_RATELIMIT`), override with `SHEET_VISION_HOURLY_LIMIT`.
 
 ## Request
 
@@ -56,11 +56,15 @@ Same shape as `SheetRecognitionResult` plus `source: "vision"` on success.
 
 ### Cloudflare (production)
 
-After deploy, set secrets on the Worker (same account as CD):
-
-```bash
-npx wrangler secret put GEMINI_API_KEY --config dist/server/wrangler.json
-```
+1. Create a KV namespace for rate limits:
+   ```bash
+   npx wrangler kv namespace create SHEET_VISION_RATELIMIT
+   ```
+2. Put the namespace id in `.openai/hosting.json` as `vision_rate_kv_id` (or update the generated wrangler config).
+3. Set the Gemini key:
+   ```bash
+   npx wrangler secret put GEMINI_API_KEY --config dist/server/wrangler.json
+   ```
 
 For GitHub Actions, add `GEMINI_API_KEY` as a repository secret and extend CD to pass it into the Worker if your vinext deploy supports env binding (or set once manually in the dashboard).
 
