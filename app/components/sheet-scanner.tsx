@@ -208,6 +208,18 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
           </div>
         ) : null}
         {previewLive ? <div className="sheet-scanner__guide" aria-hidden="true" /> : null}
+        {previewLive && status === "camera" && (
+          <div className="sheet-scanner__capture-bar">
+            <button
+              type="button"
+              className="sheet-scanner__shutter"
+              disabled={busy}
+              aria-label="Take photo and play"
+              onClick={() => captureFrame(false)}
+            />
+            <span className="sheet-scanner__capture-hint">Take photo</span>
+          </div>
+        )}
       </div>
       <p className="sheet-scanner__message" role="status">{message}</p>
       {status === "scanning" && scanProgress && (
@@ -235,9 +247,11 @@ export function SheetScanner({ onResult, busy = false, hasScore = false }: Sheet
           </>
         ) : (
           <>
-            <button type="button" className="primary-action" onClick={() => captureFrame(false)} disabled={busy || status === "scanning"}>
-              <span aria-hidden="true">✦</span> {status === "scanning" ? "Reading…" : "Scan & play"}
-            </button>
+            {status !== "camera" && (
+              <button type="button" className="primary-action" onClick={() => captureFrame(false)} disabled={busy || status === "scanning"}>
+                <span aria-hidden="true">✦</span> {status === "scanning" ? "Reading…" : "Capture & play"}
+              </button>
+            )}
             {hasScore && (
               <button type="button" className="text-action" onClick={() => captureFrame(true)} disabled={busy || status === "scanning"}>
                 Add page <span>+</span>
