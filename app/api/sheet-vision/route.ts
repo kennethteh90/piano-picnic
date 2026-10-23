@@ -1,5 +1,5 @@
-import { recognizeWithOpenAI } from "../../lib/sheet-vision-openai.ts";
 import { parseVisionRequestBody } from "../../lib/sheet-vision-parse.ts";
+import { recognizeWithVisionProvider, resolveSheetVisionProvider } from "../../lib/sheet-vision-provider.ts";
 import { SHEET_VISION_MAX_BODY_BYTES, SHEET_VISION_MAX_IMAGE_BYTES } from "../../lib/sheet-vision-types.ts";
 
 export async function POST(request: Request) {
@@ -20,8 +20,8 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, reason: parsed.error }, { status: 400 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  const resolved = resolveSheetVisionProvider();
+  if (!resolved) {
     return Response.json(
       { ok: false, reason: "Vision API not configured on the server." },
       { status: 503 },
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   // TODO: verify turnstileToken when TURNSTILE_SECRET_KEY is set
   // TODO: KV daily quota (SHEET_VISION_DAILY_CAP)
 
-  const result = await recognizeWithOpenAI(parsed.request, apiKey);
+  const result = await recognizeWithVisionProvider(parsed.request, resolved);
   if (!result.ok) {
     return Response.json(result, { status: 422 });
   }

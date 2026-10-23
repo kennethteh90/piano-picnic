@@ -1,9 +1,6 @@
 import { parseVisionModelPayload } from "./sheet-vision-parse.ts";
+import { SHEET_VISION_SYSTEM, SHEET_VISION_USER } from "./sheet-vision-prompt.ts";
 import type { SheetVisionRequest, SheetVisionResult } from "./sheet-vision-types.ts";
-
-const SYSTEM = `You read simple piano grand-staff images. Return JSON only, no markdown.
-Schema: { "events": [ { "treble": [{ "note": "E4", "staccato"?: true, "tiedToNext"?: true, ... }], "bass": [...] } ] }
-Notes are spelled like C4, F#4, Bb3. Order events left-to-right in time. Chords share one event with multiple pitches in treble or bass.`;
 
 export async function recognizeWithOpenAI(request: SheetVisionRequest, apiKey: string): Promise<SheetVisionResult> {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -17,11 +14,11 @@ export async function recognizeWithOpenAI(request: SheetVisionRequest, apiKey: s
       max_tokens: 1200,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: SHEET_VISION_SYSTEM },
         {
           role: "user",
           content: [
-            { type: "text", text: "List note events on this grand staff for playback in C major / common accidentals." },
+            { type: "text", text: SHEET_VISION_USER },
             {
               type: "image_url",
               image_url: { url: `data:${request.mime};base64,${request.image}`, detail: "low" },

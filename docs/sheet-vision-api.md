@@ -1,16 +1,10 @@
 # Sheet vision API (LLM)
 
-## Cursor subscription vs production vision
+## Default provider: Google Gemini
 
-**A Cursor subscription (Pro, Ultra, etc.) is not an HTTP API for your live site.**
+Production should use **Gemini with billing enabled** (pay-as-you-go API key), not the no-card free tier, so prompts are handled under Google's **paid API data terms** (not used to improve Google products). Confirm current terms in [Google AI Studio](https://aistudio.google.com/) / Gemini API documentation before launch.
 
-| What | Pays for | Usable from `piano.codingagents.cc`? |
-|------|----------|-------------------------------------|
-| Cursor subscription | Agent, chat, and edits inside the Cursor IDE | **No** — no key you can call from Workers |
-| OpenAI / Anthropic / Google API | Per-token usage on the provider account | **Yes** — via a server-side proxy |
-| Cloudflare Workers AI | Usage on your Cloudflare account | **Yes** — same Worker, different binding |
-
-Cursor helps you **build** this feature; **billing for end-user scans** is a separate provider account (or Workers AI) with secrets in GitHub / Cloudflare, not Cursor settings.
+OpenAI remains available as a fallback via `SHEET_VISION_PROVIDER=openai`.
 
 ## Architecture
 
@@ -20,17 +14,17 @@ Browser (sheet reader)
   │  optional: Turnstile token
   ▼
 POST /api/sheet-vision  (Cloudflare Worker / vinext route)
-  │  rate limit + daily quota (KV or Rate Limiting rules)
-  │  OPENAI_API_KEY or Workers AI binding (secret, never client)
+  │  rate limit + daily quota (KV — TODO)
+  │  GEMINI_API_KEY (secret, never client)
   ▼
-Vision model → JSON only (structured output)
+Gemini Flash → JSON only
   │  validate → ScannedEvent[]
   ▼
-Client merges with local OMR or replaces when "Enhanced read" is on
+Client uses result when "Enhanced read" is on; else local OMR
 ```
 
-**Default:** local `recognizeSheetFromImageData` (free, private, offline-capable).  
-**Optional:** user taps **Enhanced read** → one guarded API call.
+**Default scan:** local `recognizeSheetFromImageData` (on device, no upload).  
+**Enhanced read:** `fetchSheetVision` in `app/lib/sheet-vision-client.ts`.
 
 ## Request
 
@@ -38,92 +32,63 @@ Client merges with local OMR or replaces when "Enhanced read" is on
 
 ```json
 {
-  "image": "<base64 JPEG or WebP, no data: prefix>",
+  "image": "<base64, no data: prefix>",
   "mime": "image/jpeg",
   "pages": 1,
   "turnstileToken": "<optional>"
 }
 ```
 
-Limits enforced in the route:
-
-- Body size cap (e.g. 600KB JSON)
-- Image dimensions cap after decode (e.g. 1600px longest edge)
-- Per-IP requests per hour (KV counter or Cloudflare Rate Limiting)
-
 ## Response
 
-Success (`200`):
+Same shape as `SheetRecognitionResult` plus `source: "vision"` on success.
 
-```json
-{
-  "ok": true,
-  "events": [
-    {
-      "treble": [{ "note": "E4", "staccato": true }],
-      "bass": [{ "note": "C3" }]
-    }
-  ],
-  "pages": 1,
-  "source": "vision"
-}
-```
-
-Failure (`4xx` / `5xx`):
-
-```json
-{ "ok": false, "reason": "human-readable message" }
-```
-
-Shape matches `SheetRecognitionResult` in `app/lib/sheet-recognition.ts`.
-
-## Secrets (GitHub CD → Cloudflare)
-
-Add in repo **Settings → Secrets** (same as `CLOUDFLARE_API_TOKEN`):
+## Secrets
 
 | Secret | Purpose |
 |--------|---------|
-| `OPENAI_API_KEY` | Calls OpenAI vision (if you choose OpenAI) |
-| `SHEET_VISION_DAILY_CAP` | Optional, e.g. `200` scans/day globally |
-| `TURNSTILE_SECRET_KEY` | Optional bot gate before vision |
+| `GEMINI_API_KEY` | **Required** for enhanced read (from Google AI Studio / Cloud with billing) |
+| `GEMINI_MODEL` | Optional, default `gemini-2.0-flash` |
+| `SHEET_VISION_PROVIDER` | Optional: `gemini` (default when Gemini key set) or `openai` |
+| `OPENAI_API_KEY` | Only if using OpenAI instead |
+| `SHEET_VISION_DAILY_CAP` | Optional global daily limit (TODO: KV) |
+| `TURNSTILE_SECRET_KEY` | Optional bot gate (TODO) |
 
-Wire into the Worker via `wrangler secret put` or vinext env mapping in deploy config.
+### Cloudflare (production)
 
-**Do not** put these in the client or in Cursor; only in Cloudflare.
+After deploy, set secrets on the Worker (same account as CD):
 
-## Cost controls
+```bash
+npx wrangler secret put GEMINI_API_KEY --config dist/server/wrangler.json
+```
 
-1. **Client:** downscale before upload (already done for local OMR; reuse for vision).
-2. **Server:** reject oversize payloads; fixed model + `max_tokens`; structured JSON schema (no rambling).
-3. **Quota:** KV key `vision:YYYY-MM-DD` increment; return `429` when over cap.
-4. **Product:** Enhanced read behind a toggle; consider logged-in users later for per-user caps.
-5. **Fallback:** on API error, keep local OMR result if any.
+For GitHub Actions, add `GEMINI_API_KEY` as a repository secret and extend CD to pass it into the Worker if your vinext deploy supports env binding (or set once manually in the dashboard).
 
-## Model choice (examples)
+**Do not** commit keys or put them in Cursor; only in Cloudflare / GitHub secrets.
 
-- OpenAI: `gpt-4o-mini` with `response_format: json_schema` — good cost/quality for simple grand staff.
-- Anthropic: message with image block + tool/schema.
-- Workers AI: `@cf/...` vision model if available on your plan — no OpenAI bill, still metered on CF.
+## Privacy (product copy)
 
-## Implementation files
-
-| File | Role |
-|------|------|
-| `app/api/sheet-vision/route.ts` | POST handler, limits, provider call |
-| `app/lib/sheet-vision-types.ts` | Request/response types |
-| `app/lib/sheet-vision-parse.ts` | Validate model JSON → `ScannedEvent[]` |
-| `app/lib/sheet-vision-client.ts` | Browser helper (resize + fetch) — wire when UI toggle exists |
+- **Local scan:** image stays on the device.
+- **Enhanced read:** image is sent to your server, then to **Google Gemini** under your API project. Use a **billed** API key and link to Google's privacy terms in the UI.
 
 ## Local dev
 
-Without `OPENAI_API_KEY`, the route returns `503` with `{ "ok": false, "reason": "Vision API not configured" }`.
-
 ```bash
-OPENAI_API_KEY=sk-... npm run dev
+GEMINI_API_KEY=... npm run dev
 ```
 
-Test with a small JPEG base64 payload (see unit tests for parse only).
+Without a key, `POST /api/sheet-vision` returns **503**.
 
-## Privacy
+## Files
 
-Tell users: **Enhanced read** sends the sheet image to your server and the configured provider. **Local scan** stays on device.
+| File | Role |
+|------|------|
+| `app/api/sheet-vision/route.ts` | POST handler |
+| `app/lib/sheet-vision-gemini.ts` | Gemini `generateContent` |
+| `app/lib/sheet-vision-provider.ts` | Provider selection |
+| `app/lib/sheet-vision-parse.ts` | JSON validation |
+| `app/lib/sheet-vision-client.ts` | Browser fetch helper |
+
+## Cost controls
+
+Downscale on client, cap body size, JSON-only output, daily quota (TODO), Turnstile (TODO), keep local OMR as free default.
